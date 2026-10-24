@@ -43,13 +43,24 @@ jobs:
           cat app/libs/discord-part-* > app/libs/discord_partner_sdk.aar
           unzip -t app/libs/discord_partner_sdk.aar
 
-              - name: Inspect Discord Social SDK contents
-                run: |
-                   echo "=== AAR entries ==="
-                   unzip -Z1 app/libs/discord_partner_sdk.aar | grep -Ei 'classes.jar|jni/|prefab|discordpp|libdiscord|headers' || true
-                   echo "=== Java classes ==="
-                   unzip -p app/libs/discord_partner_sdk.aar classes.jar > /tmp/discord-classes.jar
-                   unzip -l /tmp/discord-classes.jar | head -100
+    - name: Rebuild Discord Social SDK AAR
+      run: |
+        set -e
+        test -f app/libs/discord-part-00
+        cat app/libs/discord-part-* > app/libs/discord_partner_sdk.aar
+        unzip -t app/libs/discord_partner_sdk.aar
+
+    - name: Inspect Discord Social SDK contents
+      run: |
+        echo "=== AAR entries ==="
+        unzip -Z1 app/libs/discord_partner_sdk.aar | grep -Ei 'classes.jar|libs/|jni/|prefab|discordpp|libdiscord|headers' || true
+        if unzip -Z1 app/libs/discord_partner_sdk.aar | grep -qx 'classes.jar'; then
+          unzip -p app/libs/discord_partner_sdk.aar classes.jar > /tmp/discord-classes.jar
+          unzip -l /tmp/discord-classes.jar | head -100
+        else
+          echo "No classes.jar at AAR root; checking libs/"
+          unzip -Z1 app/libs/discord_partner_sdk.aar | grep -E '^libs/.*\.jar$' || true
+        fi
     - name: Fix gradle permissions
       run: chmod +x ./gradlew
 
