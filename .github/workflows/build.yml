@@ -36,7 +36,12 @@ jobs:
 
     - name: Generate keystore file
       run: echo ${{secrets.KEYSTORE_FILE}} | base64 -d > ~/release.keystore
-
+    - name: Rebuild Discord Social SDK AAR
+      run: |
+          set -e
+          test -f app/libs/discord-part-00
+          cat app/libs/discord-part-* > app/libs/discord_partner_sdk.aar
+          unzip -t app/libs/discord_partner_sdk.aar
     - name: Fix gradle permissions
       run: chmod +x ./gradlew
 
