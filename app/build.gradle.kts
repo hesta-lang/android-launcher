@@ -317,6 +317,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        prefab = true
     }
     packaging {
         resources {
