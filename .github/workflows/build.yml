@@ -61,6 +61,12 @@ jobs:
           echo "No classes.jar at AAR root; checking libs/"
           unzip -Z1 app/libs/discord_partner_sdk.aar | grep -E '^libs/.*\.jar$' || true
         fi
+    -  name: Upload Discord Social SDK AAR
+       uses: actions/upload-artifact@v4
+       with:
+          name: discord-social-sdk-aar
+          path: app/libs/discord_partner_sdk.aar
+          if-no-files-found: error
     - name: Fix gradle permissions
       run: chmod +x ./gradlew
 
