@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.text.InputType
 import android.util.Log
+import com.discord.socialsdk.DiscordSocialSdkInit
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowManager
@@ -84,6 +85,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         FMOD.init(this)
 
         super.onCreate(savedInstanceState)
+        DiscordSocialSdkInit.setEngineActivity(this)
 
         // return back to main if Geometry Dash isn't found
         if (!GamePackageUtils.isGameInstalled(packageManager)) {
