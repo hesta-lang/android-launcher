@@ -9,6 +9,7 @@ import com.spotify.android.appremote.api.SpotifyAppRemote
 import com.spotify.protocol.client.CallResult
 import com.spotify.protocol.types.PlayerState
 import java.lang.ref.WeakReference
+import java.util.concurrent.TimeUnit
 
 /**
  * Small JNI-facing bridge for the Music Integrations Geode mod.
@@ -75,6 +76,38 @@ object SpotifyAppRemoteBridge {
     @JvmStatic
     fun isConnected(): Boolean = remote?.isConnected == true
 
+    /**
+     * Reads recent logcat entries belonging to this app process and keeps only
+     * Spotify App Remote / locator / bridge messages. This is diagnostic-only;
+     * Android may restrict which log entries are available on some devices.
+     */
+    private fun captureSpotifyLogs(): String {
+        return try {
+            val process = ProcessBuilder("logcat", "-d", "-v", "time", "-t", "2000")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            process.waitFor(2, TimeUnit.SECONDS)
+            val matches = output.lineSequence().filter { line ->
+                val lower = line.lowercase()
+                lower.contains("spotifyappremote") ||
+                    lower.contains("spotifylocator") ||
+                    lower.contains("spotify app remote") ||
+                    lower.contains("spotifyappremotebridge") ||
+                    lower.contains("com.spotify.android.appremote") ||
+                    lower.contains("com.spotify.protocol")
+            }.takeLast(250).toList()
+            if (matches.isEmpty()) {
+                "No matching Spotify SDK log lines were readable from logcat. Android may restrict log access, or the SDK may use different log tags."
+            } else {
+                matches.joinToString("\n")
+            }
+        } catch (error: Throwable) {
+            Log.w(TAG, "Could not capture Spotify SDK logcat", error)
+            "Unable to read logcat: ${error.javaClass.name}: ${error.message}"
+        }
+    }
+
     private fun connect(activity: GeometryDashActivity) {
         Log.i(TAG, "Connecting to Spotify App Remote")
         runCatching { SpotifyAppRemote.setDebugMode(true) }
@@ -138,7 +171,7 @@ object SpotifyAppRemoteBridge {
                     "com.spotify.music.canary",
                     "com.spotify.music.partners"
                 )
-                val packageReport = packageNames.joinToString("\\n") { packageName ->
+                val packageReport = packageNames.joinToString("\n") { packageName ->
                     val info = runCatching { pm.getPackageInfo(packageName, 0) }.getOrNull()
                     if (info == null) {
                         "$packageName: not visible/not installed"
@@ -155,7 +188,8 @@ object SpotifyAppRemoteBridge {
                     }
                 }
                 val launchable = runCatching { pm.getLaunchIntentForPackage("com.spotify.music") != null }.getOrDefault(false)
-                val diagnostic = "Spotify App Remote connection failed\\n\\nSDK detects Spotify: $sdkDetectsSpotify\\nLaunchable: $launchable\\n\\n=== Spotify package candidates ===\\n$packageReport\\n\\n=== Exception chain ===\\n$causes"
+                val spotifyLogs = captureSpotifyLogs()
+                val diagnostic = "Spotify App Remote connection failed\n\nSDK detects Spotify: $sdkDetectsSpotify\nLaunchable: $launchable\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
                 Log.e(TAG, diagnostic, throwable)
                 AlertDialog.Builder(activity)
                     .setTitle("Diagnóstico de Spotify")
