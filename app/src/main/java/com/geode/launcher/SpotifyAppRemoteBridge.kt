@@ -1,6 +1,7 @@
 package com.geode.launcher
 
 import android.util.Log
+import android.widget.Toast
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
 import com.spotify.android.appremote.api.SpotifyAppRemote
@@ -49,6 +50,7 @@ object SpotifyAppRemoteBridge {
         }
         activity.runOnUiThread {
             Log.i(TAG, "Handling action=$action on UI thread")
+            Toast.makeText(activity, "Music Integrations: botón recibido", Toast.LENGTH_SHORT).show()
             val connected = remote
             if (connected != null && connected.isConnected) {
                 performAction(connected, action)
@@ -74,6 +76,7 @@ object SpotifyAppRemoteBridge {
 
     private fun connect(activity: GeometryDashActivity) {
         Log.i(TAG, "Connecting to Spotify App Remote")
+        Toast.makeText(activity, "Music Integrations: conectando con Spotify…", Toast.LENGTH_SHORT).show()
         if (remote?.isConnected == true) {
             pendingAction?.let { action ->
                 pendingAction = null
@@ -90,6 +93,7 @@ object SpotifyAppRemoteBridge {
         SpotifyAppRemote.connect(activity, params, object : Connector.ConnectionListener {
             override fun onConnected(spotifyAppRemote: SpotifyAppRemote) {
                 Log.i(TAG, "Spotify App Remote connected")
+                Toast.makeText(activity, "Music Integrations: Spotify conectado", Toast.LENGTH_SHORT).show()
                 remote = spotifyAppRemote
                 spotifyAppRemote.playerApi.subscribeToPlayerState()
                     .setEventCallback { state: PlayerState ->
@@ -109,6 +113,7 @@ object SpotifyAppRemoteBridge {
 
             override fun onFailure(throwable: Throwable) {
                 Log.e(TAG, "Spotify App Remote connection failed", throwable)
+                Toast.makeText(activity, "Music Integrations: falló conexión Spotify", Toast.LENGTH_LONG).show()
                 remote = null
                 pendingAction = null
             }
