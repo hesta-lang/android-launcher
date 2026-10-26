@@ -146,7 +146,7 @@ object SpotifyAppRemoteBridge {
                         val appInfo = info.applicationInfo
                         val installer = runCatching {
                             if (android.os.Build.VERSION.SDK_INT >= 30) pm.getInstallSourceInfo(packageName).installingPackageName
-                            else @Suppress("DEPRECATION") pm.getInstallerPackageName(packageName)
+                            else pm.getInstallerPackageName(packageName)
                         }.getOrNull() ?: "unknown"
                         val targetSdk = appInfo?.targetSdkVersion ?: -1
                         val enabled = appInfo?.enabled ?: false
