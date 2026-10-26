@@ -349,6 +349,8 @@ androidComponents {
 
 dependencies {
     implementation(files("libs/discord_partner_sdk.aar"))
+    implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
+    implementation("com.google.code.gson:gson:2.13.2")
     implementation (platform("androidx.compose:compose-bom:2026.09.00"))
     implementation ("androidx.core:core-ktx:1.19.1")
     implementation ("androidx.compose.ui:ui")
