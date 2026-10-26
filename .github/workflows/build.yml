@@ -90,18 +90,22 @@ jobs:
         mkdir -p app/libs
         RELEASE_API="https://api.github.com/repos/spotify/android-sdk/releases/tags/v0.8.0-appremote_v2.1.0-auth"
         curl --fail --location --retry 3 "$RELEASE_API" --output /tmp/spotify-release.json
-        ASSET_URL="$(python3 -c 'import json; d=json.load(open("/tmp/spotify-release.json")); assets=d.get("assets", []); matches=[a["browser_download_url"] for a in assets if a["name"].lower().endswith(".zip")]; print(matches[0] if matches else "")')"
-        if [ -z "$ASSET_URL" ]; then
-          echo "No ZIP asset found in Spotify SDK release."
+        APP_REMOTE_URL="$(python3 -c 'import json; d=json.load(open("/tmp/spotify-release.json")); assets=d.get("assets", []); matches=[a["browser_download_url"] for a in assets if a["name"] == "spotify-app-remote-release-0.8.0.aar"]; print(matches[0] if matches else "")')"
+        AUTH_URL="$(python3 -c 'import json; d=json.load(open("/tmp/spotify-release.json")); assets=d.get("assets", []); matches=[a["browser_download_url"] for a in assets if a["name"] == "spotify-auth-release-2.1.0.aar"]; print(matches[0] if matches else "")')"
+        if [ -z "$APP_REMOTE_URL" ]; then
+          echo "Spotify App Remote AAR not found in official release assets."
           python3 -c 'import json; print("\n".join(a["name"] for a in json.load(open("/tmp/spotify-release.json")).get("assets", [])))'
           exit 1
         fi
-        echo "Downloading official release asset: $ASSET_URL"
-        curl --fail --location --retry 3 "$ASSET_URL" --output /tmp/spotify-android-sdk.zip
-        unzip -l /tmp/spotify-android-sdk.zip | grep -E "app-remote-lib/spotify-app-remote-release-0.8.0.aar$"
-        unzip -p /tmp/spotify-android-sdk.zip "*/app-remote-lib/spotify-app-remote-release-0.8.0.aar" > app/libs/spotify-app-remote-release-0.8.0.aar
+        curl --fail --location --retry 3 "$APP_REMOTE_URL" --output app/libs/spotify-app-remote-release-0.8.0.aar
         test -s app/libs/spotify-app-remote-release-0.8.0.aar
         unzip -t app/libs/spotify-app-remote-release-0.8.0.aar
+        if [ -n "$AUTH_URL" ]; then
+          curl --fail --location --retry 3 "$AUTH_URL" --output app/libs/spotify-auth-release-2.1.0.aar
+          test -s app/libs/spotify-auth-release-2.1.0.aar
+        else
+          echo "Auth AAR not listed as a separate asset; continuing with App Remote AAR."
+        fi
     - name: Fix gradle permissions
       run: chmod +x ./gradlew
 
