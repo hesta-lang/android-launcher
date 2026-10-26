@@ -126,7 +126,10 @@ object SpotifyAppRemoteBridge {
                             (if (frames.isNotEmpty()) "\n$frames" else "")
                     }
                     .joinToString("\n\n")
-                val diagnostic = "Spotify App Remote connection failed\n\n$causes"
+                val sdkDetectsSpotify = runCatching { SpotifyAppRemote.isSpotifyInstalled(activity) }.getOrDefault(false)
+                val packageInstalled = runCatching { activity.packageManager.getPackageInfo("com.spotify.music", 0) != null }.getOrDefault(false)
+                val launchable = runCatching { activity.packageManager.getLaunchIntentForPackage("com.spotify.music") != null }.getOrDefault(false)
+                val diagnostic = "Spotify App Remote connection failed\n\nSDK detects Spotify: $sdkDetectsSpotify\nPackage com.spotify.music installed: $packageInstalled\nSpotify launchable: $launchable\n\n$causes"
                 Log.e(TAG, diagnostic, throwable)
                 AlertDialog.Builder(activity)
                     .setTitle("Diagnóstico de Spotify")
