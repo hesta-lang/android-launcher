@@ -108,7 +108,7 @@ object SpotifyAppRemoteBridge {
     private fun performAction(appRemote: SpotifyAppRemote, action: Int) {
         val result: CallResult<*> = when (action) {
             0 -> appRemote.playerApi.pause()
-            1 -> appRemote.playerApi.play()
+            1 -> appRemote.playerApi.resume()
             2 -> appRemote.playerApi.skipNext()
             3 -> appRemote.playerApi.skipPrevious()
             else -> return
