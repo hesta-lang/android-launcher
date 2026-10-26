@@ -11,3 +11,7 @@
 
 # Spotify App Remote references this optional nullability annotation in a service signature.
 -dontwarn com.spotify.base.annotations.NotNull
+
+# Preserve Spotify App Remote exception names so connection diagnostics remain readable.
+-keep class com.spotify.android.appremote.api.error.** { *; }
+-keep class com.spotify.protocol.error.** { *; }
