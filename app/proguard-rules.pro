@@ -8,3 +8,6 @@
 
 # Spotify bridge is invoked by name from the native Geode mod.
 -keep class com.geode.launcher.SpotifyAppRemoteBridge { *; }
+
+# Spotify App Remote references this optional nullability annotation in a service signature.
+-dontwarn com.spotify.base.annotations.NotNull
