@@ -113,7 +113,7 @@ object SpotifyAppRemoteBridge {
 
             override fun onFailure(throwable: Throwable) {
                 Log.e(TAG, "Spotify App Remote connection failed", throwable)
-                Toast.makeText(activity, "Music Integrations: falló conexión Spotify", Toast.LENGTH_LONG).show()
+                Toast.makeText(activity, "Spotify: " + throwable.javaClass.simpleName + (throwable.message?.let { ": " + it } ?: ""), Toast.LENGTH_LONG).show()
                 remote = null
                 pendingAction = null
             }
