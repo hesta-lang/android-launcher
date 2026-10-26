@@ -30,36 +30,19 @@ jobs:
           unzip -t app/libs/discord_partner_sdk.aar
 
       - name: Download Spotify SDK AARs
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p app/libs
-          RELEASE_API="https://api.github.com/repos/spotify/android-sdk/releases/tags/v0.8.0-appremote_v2.1.0-auth"
           curl --fail --location --retry 3 \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "$RELEASE_API" --output /tmp/spotify-release.json
-          python3 - <<'PY'
-          import json
-          data = json.load(open("/tmp/spotify-release.json"))
-          assets = {a["name"]: a["browser_download_url"] for a in data.get("assets", [])}
-          required = {
-              "spotify-app-remote-release-0.8.0.aar": "app/libs/spotify-app-remote-release-0.8.0.aar",
-              "spotify-auth-release-2.1.0.aar": "app/libs/spotify-auth-release-2.1.0.aar",
-          }
-          missing = [name for name in required if name not in assets]
-          if missing:
-              raise SystemExit("Missing official Spotify SDK release assets: " + ", ".join(missing))
-          with open("/tmp/spotify-assets.tsv", "w") as f:
-              for name, path in required.items():
-                  f.write(assets[name] + "\\t" + path + "\\n")
-          PY
-          while IFS="$(printf '\\t')" read -r url path; do
-            curl --fail --location --retry 3 "$url" --output "$path"
-            test -s "$path"
-            unzip -t "$path"
-          done < /tmp/spotify-assets.tsv
+            "https://github.com/spotify/android-sdk/releases/download/v0.8.0-appremote_v2.1.0-auth/spotify-app-remote-release-0.8.0.aar" \
+            --output app/libs/spotify-app-remote-release-0.8.0.aar
+          curl --fail --location --retry 3 \
+            "https://github.com/spotify/android-sdk/releases/download/v0.8.0-appremote_v2.1.0-auth/spotify-auth-release-2.1.0.aar" \
+            --output app/libs/spotify-auth-release-2.1.0.aar
+          test -s app/libs/spotify-app-remote-release-0.8.0.aar
+          test -s app/libs/spotify-auth-release-2.1.0.aar
+          unzip -t app/libs/spotify-app-remote-release-0.8.0.aar
+          unzip -t app/libs/spotify-auth-release-2.1.0.aar
 
       - name: Prepare signing keystore
         env:
