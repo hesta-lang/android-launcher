@@ -85,6 +85,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         FMOD.init(this)
 
         super.onCreate(savedInstanceState)
+        SpotifyAppRemoteBridge.setActivity(this)
         DiscordSocialSdkInit.setEngineActivity(this)
 
         // return back to main if Geometry Dash isn't found
@@ -580,6 +581,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
     }
 
     override fun onDestroy() {
+        SpotifyAppRemoteBridge.setActivity(null)
         super.onDestroy()
         FMOD.close()
     }
