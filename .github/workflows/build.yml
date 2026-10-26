@@ -88,12 +88,20 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p app/libs
-        curl --fail --location --retry 3 --retry-all-errors "https://github.com/spotify/android-sdk/releases/download/v0.8.0-appremote_v2.1.0-auth/spotify-android-sdk-0.8.0.zip" --output /tmp/spotify-android-sdk.zip
+        RELEASE_API="https://api.github.com/repos/spotify/android-sdk/releases/tags/v0.8.0-appremote_v2.1.0-auth"
+        curl --fail --location --retry 3 "$RELEASE_API" --output /tmp/spotify-release.json
+        ASSET_URL="$(python3 -c 'import json; d=json.load(open("/tmp/spotify-release.json")); assets=d.get("assets", []); matches=[a["browser_download_url"] for a in assets if a["name"].lower().endswith(".zip")]; print(matches[0] if matches else "")')"
+        if [ -z "$ASSET_URL" ]; then
+          echo "No ZIP asset found in Spotify SDK release."
+          python3 -c 'import json; print("\n".join(a["name"] for a in json.load(open("/tmp/spotify-release.json")).get("assets", [])))'
+          exit 1
+        fi
+        echo "Downloading official release asset: $ASSET_URL"
+        curl --fail --location --retry 3 "$ASSET_URL" --output /tmp/spotify-android-sdk.zip
         unzip -l /tmp/spotify-android-sdk.zip | grep -E "app-remote-lib/spotify-app-remote-release-0.8.0.aar$"
         unzip -p /tmp/spotify-android-sdk.zip "*/app-remote-lib/spotify-app-remote-release-0.8.0.aar" > app/libs/spotify-app-remote-release-0.8.0.aar
         test -s app/libs/spotify-app-remote-release-0.8.0.aar
         unzip -t app/libs/spotify-app-remote-release-0.8.0.aar
-
     - name: Fix gradle permissions
       run: chmod +x ./gradlew
 
