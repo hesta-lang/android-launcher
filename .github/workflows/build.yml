@@ -85,11 +85,16 @@ jobs:
         if-no-files-found: error
         
     - name: Download Spotify App Remote SDK 0.8.0
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         mkdir -p app/libs
         RELEASE_API="https://api.github.com/repos/spotify/android-sdk/releases/tags/v0.8.0-appremote_v2.1.0-auth"
-        curl --fail --location --retry 3 "$RELEASE_API" --output /tmp/spotify-release.json
+        curl --fail --location --retry 3 \
+          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          "$RELEASE_API" --output /tmp/spotify-release.json
         APP_REMOTE_URL="$(python3 -c 'import json; d=json.load(open("/tmp/spotify-release.json")); assets=d.get("assets", []); matches=[a["browser_download_url"] for a in assets if a["name"] == "spotify-app-remote-release-0.8.0.aar"]; print(matches[0] if matches else "")')"
         AUTH_URL="$(python3 -c 'import json; d=json.load(open("/tmp/spotify-release.json")); assets=d.get("assets", []); matches=[a["browser_download_url"] for a in assets if a["name"] == "spotify-auth-release-2.1.0.aar"]; print(matches[0] if matches else "")')"
         if [ -z "$APP_REMOTE_URL" ]; then
