@@ -36,6 +36,20 @@ jobs:
 
     - name: Generate keystore file
       run: echo ${{secrets.KEYSTORE_FILE}} | base64 -d > ~/release.keystore
+
+    - name: Show signing certificate SHA-1
+      if: ${{ matrix.config.flavor == 'standard' && matrix.config.lower == 'release' }}
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        set -euo pipefail
+        keytool -list -v \
+          -keystore "$HOME/release.keystore" \
+          -storepass "$KEYSTORE_PASSWORD" \
+          -alias "$KEY_ALIAS" \
+          | grep -i 'SHA1:'
+
     - name: Rebuild Discord Social SDK AAR
       run: |
           set -e
