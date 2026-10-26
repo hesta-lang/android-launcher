@@ -128,12 +128,34 @@ object SpotifyAppRemoteBridge {
                             (if (frames.isNotEmpty()) "\n$frames" else "")
                     }
                     .joinToString("\n\n")
-                val sdkDetectsSpotify = runCatching { SpotifyAppRemote.isSpotifyInstalled(activity) }.getOrDefault(false)
-                val spotifyInfo = runCatching { activity.packageManager.getPackageInfo("com.spotify.music", 0) }
-                val packageInstalled = spotifyInfo.isSuccess
-                val spotifyVersion = spotifyInfo.getOrNull()?.let { "${it.versionName} (code ${it.longVersionCode})" } ?: "unavailable"
-                val launchable = runCatching { activity.packageManager.getLaunchIntentForPackage("com.spotify.music") != null }.getOrDefault(false)
-                val diagnostic = "Spotify App Remote connection failed\n\nSDK detects Spotify: $sdkDetectsSpotify\nPackage com.spotify.music installed: $packageInstalled\nSpotify version: $spotifyVersion\nSpotify launchable: $launchable\n\n$causes"
+                val pm = activity.packageManager
+                val sdkDetectsSpotify = runCatching { SpotifyAppRemote.isSpotifyInstalled(activity) }
+                    .onFailure { Log.e(TAG, "isSpotifyInstalled check threw", it) }
+                    .getOrDefault(false)
+                val packageNames = listOf(
+                    "com.spotify.music",
+                    "com.spotify.music.debug",
+                    "com.spotify.music.canary",
+                    "com.spotify.music.partners"
+                )
+                val packageReport = packageNames.joinToString("\\n") { packageName ->
+                    val info = runCatching { pm.getPackageInfo(packageName, 0) }.getOrNull()
+                    if (info == null) {
+                        "$packageName: not visible/not installed"
+                    } else {
+                        val appInfo = info.applicationInfo
+                        val installer = runCatching {
+                            if (android.os.Build.VERSION.SDK_INT >= 30) pm.getInstallSourceInfo(packageName).installingPackageName
+                            else @Suppress("DEPRECATION") pm.getInstallerPackageName(packageName)
+                        }.getOrNull() ?: "unknown"
+                        val targetSdk = appInfo?.targetSdkVersion ?: -1
+                        val enabled = appInfo?.enabled ?: false
+                        val source = appInfo?.sourceDir ?: "unknown"
+                        "$packageName: version=${info.versionName}, code=${info.longVersionCode}, enabled=$enabled, targetSdk=$targetSdk, installer=$installer, source=$source"
+                    }
+                }
+                val launchable = runCatching { pm.getLaunchIntentForPackage("com.spotify.music") != null }.getOrDefault(false)
+                val diagnostic = "Spotify App Remote connection failed\\n\\nSDK detects Spotify: $sdkDetectsSpotify\\nLaunchable: $launchable\\n\\n=== Spotify package candidates ===\\n$packageReport\\n\\n=== Exception chain ===\\n$causes"
                 Log.e(TAG, diagnostic, throwable)
                 AlertDialog.Builder(activity)
                     .setTitle("Diagnóstico de Spotify")
