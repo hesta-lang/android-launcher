@@ -37,9 +37,18 @@ object SpotifyAppRemoteBridge {
 
     @JvmStatic
     fun requestControl(action: Int): Boolean {
-        if (action !in 0..3) return false
-        val activity = activityRef?.get() ?: return false
+        Log.i(TAG, "requestControl called with action=$action")
+        if (action !in 0..3) {
+            Log.w(TAG, "Rejected invalid action=$action")
+            return false
+        }
+        val activity = activityRef?.get()
+        if (activity == null) {
+            Log.e(TAG, "No GeometryDashActivity registered; cannot control Spotify")
+            return false
+        }
         activity.runOnUiThread {
+            Log.i(TAG, "Handling action=$action on UI thread")
             val connected = remote
             if (connected != null && connected.isConnected) {
                 performAction(connected, action)
@@ -64,6 +73,7 @@ object SpotifyAppRemoteBridge {
     fun isConnected(): Boolean = remote?.isConnected == true
 
     private fun connect(activity: GeometryDashActivity) {
+        Log.i(TAG, "Connecting to Spotify App Remote")
         if (remote?.isConnected == true) {
             pendingAction?.let { action ->
                 pendingAction = null
@@ -106,6 +116,7 @@ object SpotifyAppRemoteBridge {
     }
 
     private fun performAction(appRemote: SpotifyAppRemote, action: Int) {
+        Log.i(TAG, "Performing Spotify playback action=$action")
         val result: CallResult<*> = when (action) {
             0 -> appRemote.playerApi.pause()
             1 -> appRemote.playerApi.resume()
@@ -113,8 +124,11 @@ object SpotifyAppRemoteBridge {
             3 -> appRemote.playerApi.skipPrevious()
             else -> return
         }
+        result.setResultCallback {
+            Log.i(TAG, "Spotify playback command $action succeeded")
+        }
         result.setErrorCallback { error ->
-            Log.w(TAG, "Spotify playback command $action failed", error)
+            Log.e(TAG, "Spotify playback command $action failed", error)
         }
     }
 }
