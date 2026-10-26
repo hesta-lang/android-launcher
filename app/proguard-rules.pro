@@ -5,3 +5,6 @@
 
 # note: if you're going to add more rules, consider the @Keep annotation
 # this should really only be kept to non-custom code
+
+# Spotify bridge is invoked by name from the native Geode mod.
+-keep class com.geode.launcher.SpotifyAppRemoteBridge { *; }
