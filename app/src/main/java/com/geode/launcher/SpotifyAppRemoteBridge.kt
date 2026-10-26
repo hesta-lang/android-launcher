@@ -1,5 +1,6 @@
 package com.geode.launcher
 
+import android.app.AlertDialog
 import android.util.Log
 import android.widget.Toast
 import com.spotify.android.appremote.api.ConnectionParams
@@ -113,9 +114,30 @@ object SpotifyAppRemoteBridge {
 
             override fun onFailure(throwable: Throwable) {
                 Log.e(TAG, "Spotify App Remote connection failed", throwable)
-                val details = generateSequence(throwable as Throwable?) { it.cause }.take(3).joinToString(" <- ") { error -> error.javaClass.name + (error.message?.let { ": " + it } ?: "") }
-                val frame = throwable.stackTrace.firstOrNull { !it.className.startsWith("android.") }?.toString().orEmpty()
-                Toast.makeText(activity, "Spotify error: $details; at $frame", Toast.LENGTH_LONG).show()
+                val causes = generateSequence(throwable as Throwable?) { it.cause }
+                    .take(4)
+                    .mapIndexed { index, error ->
+                        val hierarchy = generateSequence(error.javaClass as Class<*>?) { it.superclass }
+                            .take(5)
+                            .joinToString(" extends ") { it.name }
+                        val frames = error.stackTrace.take(4).joinToString("\n") { "  at $it" }
+                        "Cause ${index + 1}: $hierarchy" +
+                            (error.message?.let { "\nMessage: $it" } ?: "") +
+                            (if (frames.isNotEmpty()) "\n$frames" else "")
+                    }
+                    .joinToString("\n\n")
+                val diagnostic = "Spotify App Remote connection failed\n\n$causes"
+                Log.e(TAG, diagnostic, throwable)
+                AlertDialog.Builder(activity)
+                    .setTitle("Diagnóstico de Spotify")
+                    .setMessage(diagnostic)
+                    .setPositiveButton("Copiar y cerrar") { _, _ ->
+                        val clipboard = activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Spotify diagnostic", diagnostic))
+                        Toast.makeText(activity, "Diagnóstico copiado", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cerrar", null)
+                    .show()
                 remote = null
                 pendingAction = null
             }
