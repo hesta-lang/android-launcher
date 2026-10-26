@@ -77,13 +77,10 @@ object SpotifyMediaSessionFallback {
     private fun dispatch(controller: MediaController, action: Int) {
         val controls = controller.transportControls
         when (action) {
-            0 -> {
-                val playing = controller.playbackState?.state == PlaybackState.STATE_PLAYING
-                if (playing) controls.pause() else controls.play()
-            }
-            1 -> controls.skipToNext()
-            2 -> controls.skipToPrevious()
-            3 -> controls.play()
+            0 -> controls.pause()
+            1 -> controls.play()
+            2 -> controls.skipToNext()
+            3 -> controls.skipToPrevious()
             else -> throw IllegalArgumentException("Unsupported media action: $action")
         }
         Log.i(TAG, "Dispatched action=$action to ${controller.packageName}")
