@@ -53,9 +53,9 @@ jobs:
               raise SystemExit("Missing official Spotify SDK release assets: " + ", ".join(missing))
           with open("/tmp/spotify-assets.tsv", "w") as f:
               for name, path in required.items():
-                  f.write(assets[name] + "\t" + path + "\n")
+                  f.write(assets[name] + "\\t" + path + "\\n")
           PY
-          while IFS="$(printf '\t')" read -r url path; do
+          while IFS="$(printf '\\t')" read -r url path; do
             curl --fail --location --retry 3 "$url" --output "$path"
             test -s "$path"
             unzip -t "$path"
@@ -94,72 +94,41 @@ jobs:
           mkdir -p diagnostic
           {
             echo "Spotify App Remote diagnostic"
-            echo "Commit: $GITHUB_SHA"
+            echo "Workflow commit: ${GITHUB_SHA}"
+            echo "Source branch: spotify-app-remote-integration"
             echo "APK: $APK"
             echo
             echo "=== Final merged APK manifest: package visibility ==="
             "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -A 4 -B 3 -E 'com.spotify.music|QUERY_ALL_PACKAGES' || true
             echo
-            echo "=== Spotify SDK classes in final APK ==="
-            echo "-- APK dex files --"
-            "$AAPT" list "$APK" | grep -E '^classes[0-9]*\\.dex$|^lib/arm64-v8a/' | head -80 || true
-            echo "-- Spotify class names found inside APK dex --"
+            echo "=== APK DEX files ==="
+            "$AAPT" list "$APK" | grep -E '^classes[0-9]*\\.dex$' || true
+            echo
+            echo "=== Spotify class names found inside APK DEX ==="
             found_dex=0
             while IFS= read -r dex; do
-              case "$dex" in classes*.dex)
-                found_dex=1
-                echo "DEX: $dex"
-                unzip -p "$APK" "$dex" | strings | grep -E -m 40 'com/spotify/android/appremote|com/spotify/protocol|SpotifyAppRemote|CouldNotFindSpotifyApp' || true
-                ;;
+              case "$dex" in
+                classes*.dex)
+                  found_dex=1
+                  echo "DEX: $dex"
+                  unzip -p "$APK" "$dex" | strings | grep -E -m 40 'com/spotify/android/appremote|com/spotify/protocol|SpotifyAppRemote|CouldNotFindSpotifyApp' || true
+                  ;;
               esac
             done < <("$AAPT" list "$APK")
-            if [ "$found_dex" -eq 0 ]; then echo "ERROR: no classes*.dex found in APK"; fi
+            if [ "$found_dex" -eq 0 ]; then
+              echo "WARNING: no classes*.dex files found in APK"
+            fi
             echo
-            echo "=== Spotify SDK AAR Java/Kotlin classes ==="
-            if unzip -l app/libs/spotify-app-remote-release-0.8.0.aar | grep -E 'classes.jar
-            grep -n -A 5 -B 2 'com.spotify.music' app/src/main/AndroidManifest.xml || true
-            echo
-            echo "=== SDK AAR archive check ==="
-            unzip -t app/libs/spotify-app-remote-release-0.8.0.aar | tail -n 2
-            echo
-            echo "This report verifies the APK manifest and build inputs; it cannot prove runtime SDK detection by itself."
-          } | tee diagnostic/spotify-diagnostic.txt
-          cp "$APK" diagnostic/
-
-      - name: Upload diagnostic report and APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: spotify-app-remote-diagnostic
-          path: diagnostic/
-          if-no-files-found: error
-          retention-days: 7
-; then
+            echo "=== Spotify App Remote AAR classes.jar ==="
+            if unzip -l app/libs/spotify-app-remote-release-0.8.0.aar | grep -q 'classes.jar'; then
               unzip -p app/libs/spotify-app-remote-release-0.8.0.aar classes.jar > /tmp/spotify-classes.jar
               jar tf /tmp/spotify-classes.jar | grep -E 'com/spotify/android/appremote|com/spotify/protocol' | head -60 || true
             else
               echo "ERROR: classes.jar not found in Spotify App Remote AAR"
             fi
             echo
-            echo "=== Spotify Auth AAR Java/Kotlin classes ==="
+            echo "=== Spotify Auth AAR classes.jar ==="
             if [ -f app/libs/spotify-auth-release-2.1.0.aar ]; then
-              unzip -l app/libs/spotify-auth-release-2.1.0.aar | grep -E 'classes.jar
-            grep -n -A 5 -B 2 'com.spotify.music' app/src/main/AndroidManifest.xml || true
-            echo
-            echo "=== SDK AAR archive check ==="
-            unzip -t app/libs/spotify-app-remote-release-0.8.0.aar | tail -n 2
-            echo
-            echo "This report verifies the APK manifest and build inputs; it cannot prove runtime SDK detection by itself."
-          } | tee diagnostic/spotify-diagnostic.txt
-          cp "$APK" diagnostic/
-
-      - name: Upload diagnostic report and APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: spotify-app-remote-diagnostic
-          path: diagnostic/
-          if-no-files-found: error
-          retention-days: 7
- || true
               unzip -p app/libs/spotify-auth-release-2.1.0.aar classes.jar > /tmp/spotify-auth-classes.jar
               jar tf /tmp/spotify-auth-classes.jar | grep -E 'com/spotify' | head -40 || true
             else
@@ -172,7 +141,7 @@ jobs:
             echo "=== SDK AAR archive check ==="
             unzip -t app/libs/spotify-app-remote-release-0.8.0.aar | tail -n 2
             echo
-            echo "This report verifies the APK manifest and build inputs; it cannot prove runtime SDK detection by itself."
+            echo "This report checks APK packaging and build inputs; runtime SDK detection requires device logs."
           } | tee diagnostic/spotify-diagnostic.txt
           cp "$APK" diagnostic/
 
