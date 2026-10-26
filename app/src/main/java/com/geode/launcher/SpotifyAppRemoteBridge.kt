@@ -96,7 +96,7 @@ object SpotifyAppRemoteBridge {
                     lower.contains("spotifyappremotebridge") ||
                     lower.contains("com.spotify.android.appremote") ||
                     lower.contains("com.spotify.protocol")
-            }.takeLast(250).toList()
+            }.toList().takeLast(250)
             if (matches.isEmpty()) {
                 "No matching Spotify SDK log lines were readable from logcat. Android may restrict log access, or the SDK may use different log tags."
             } else {
