@@ -77,6 +77,8 @@ object SpotifyAppRemoteBridge {
 
     private fun connect(activity: GeometryDashActivity) {
         Log.i(TAG, "Connecting to Spotify App Remote")
+        runCatching { SpotifyAppRemote.setDebugMode(true) }
+            .onFailure { Log.w(TAG, "Could not enable Spotify SDK debug logging", it) }
         Toast.makeText(activity, "Music Integrations: conectando con Spotify…", Toast.LENGTH_SHORT).show()
         if (remote?.isConnected == true) {
             pendingAction?.let { action ->
@@ -127,9 +129,11 @@ object SpotifyAppRemoteBridge {
                     }
                     .joinToString("\n\n")
                 val sdkDetectsSpotify = runCatching { SpotifyAppRemote.isSpotifyInstalled(activity) }.getOrDefault(false)
-                val packageInstalled = runCatching { activity.packageManager.getPackageInfo("com.spotify.music", 0) != null }.getOrDefault(false)
+                val spotifyInfo = runCatching { activity.packageManager.getPackageInfo("com.spotify.music", 0) }
+                val packageInstalled = spotifyInfo.isSuccess
+                val spotifyVersion = spotifyInfo.getOrNull()?.let { "${it.versionName} (code ${it.longVersionCode})" } ?: "unavailable"
                 val launchable = runCatching { activity.packageManager.getLaunchIntentForPackage("com.spotify.music") != null }.getOrDefault(false)
-                val diagnostic = "Spotify App Remote connection failed\n\nSDK detects Spotify: $sdkDetectsSpotify\nPackage com.spotify.music installed: $packageInstalled\nSpotify launchable: $launchable\n\n$causes"
+                val diagnostic = "Spotify App Remote connection failed\n\nSDK detects Spotify: $sdkDetectsSpotify\nPackage com.spotify.music installed: $packageInstalled\nSpotify version: $spotifyVersion\nSpotify launchable: $launchable\n\n$causes"
                 Log.e(TAG, diagnostic, throwable)
                 AlertDialog.Builder(activity)
                     .setTitle("Diagnóstico de Spotify")
