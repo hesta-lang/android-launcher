@@ -84,6 +84,18 @@ jobs:
         path: app/libs/discord_partner_sdk.aar
         if-no-files-found: error
         
+    - name: Download Spotify App Remote SDK 0.8.0
+      run: |
+        set -euo pipefail
+        mkdir -p app/libs
+        curl -fL --retry 3 \\
+          "https://github.com/spotify/android-sdk/releases/download/v0.8.0-appremote_v2.1.0-auth/spotify-android-sdk-0.8.0.zip" \\
+          -o /tmp/spotify-android-sdk.zip
+        unzip -l /tmp/spotify-android-sdk.zip | grep -E "app-remote-lib/spotify-app-remote-release-0.8.0.aar$"
+        unzip -p /tmp/spotify-android-sdk.zip "*/app-remote-lib/spotify-app-remote-release-0.8.0.aar" > app/libs/spotify-app-remote-release-0.8.0.aar
+        test -s app/libs/spotify-app-remote-release-0.8.0.aar
+        unzip -t app/libs/spotify-app-remote-release-0.8.0.aar
+
     - name: Fix gradle permissions
       run: chmod +x ./gradlew
 
