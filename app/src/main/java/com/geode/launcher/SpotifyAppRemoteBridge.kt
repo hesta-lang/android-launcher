@@ -188,8 +188,47 @@ object SpotifyAppRemoteBridge {
                     }
                 }
                 val launchable = runCatching { pm.getLaunchIntentForPackage("com.spotify.music") != null }.getOrDefault(false)
+                val launcherResolution = runCatching {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+                        .addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+                        .setPackage("com.spotify.music")
+                    val matches = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        pm.queryIntentActivities(intent, android.content.pm.PackageManager.ResolveInfoFlags.of(0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.queryIntentActivities(intent, 0)
+                    }
+                    if (matches.isEmpty()) "No launcher activity resolved for com.spotify.music"
+                    else matches.joinToString("\n") { match ->
+                        val info = match.activityInfo
+                        "activity=${info?.name}, exported=${info?.exported}, enabled=${info?.enabled}, package=${info?.packageName}"
+                    }
+                }.getOrElse { "Launcher resolution failed: ${it.javaClass.name}: ${it.message}" }
+                val serviceReport = runCatching {
+                    val info = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        pm.getPackageInfo("com.spotify.music", android.content.pm.PackageManager.PackageInfoFlags.of(android.content.pm.PackageManager.GET_SERVICES.toLong()))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.getPackageInfo("com.spotify.music", android.content.pm.PackageManager.GET_SERVICES)
+                    }
+                    val services = info.services.orEmpty()
+                    if (services.isEmpty()) "Spotify package returned no declared services (or service metadata is not visible)"
+                    else services.joinToString("\n") { service ->
+                        "service=${service.name}, exported=${service.exported}, enabled=${service.enabled}, permission=${service.permission ?: "none"}, process=${service.processName ?: "default"}"
+                    }
+                }.getOrElse { "Service inspection failed: ${it.javaClass.name}: ${it.message}" }
+                val appVersion = runCatching {
+                    val info = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        pm.getPackageInfo(activity.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.getPackageInfo(activity.packageName, 0)
+                    }
+                    "${info.versionName} (${info.longVersionCode})"
+                }.getOrDefault("unknown")
+                val platformReport = "Android=${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT}), device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, launcher=${activity.packageName} $appVersion, App Remote AAR=0.8.0"
                 val spotifyLogs = captureSpotifyLogs()
-                val diagnostic = "Spotify App Remote connection failed\n\nSDK detects Spotify: $sdkDetectsSpotify\nLaunchable: $launchable\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
+                val diagnostic = "Spotify App Remote connection failed\n\n$platformReport\nSDK detects Spotify: $sdkDetectsSpotify\nLaunchable: $launchable\n\n=== Spotify launcher activity resolution ===\n$launcherResolution\n\n=== Spotify declared services ===\n$serviceReport\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
                 Log.e(TAG, diagnostic, throwable)
                 AlertDialog.Builder(activity)
                     .setTitle("Diagnóstico de Spotify")
