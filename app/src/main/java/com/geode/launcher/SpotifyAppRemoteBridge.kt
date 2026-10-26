@@ -114,7 +114,8 @@ object SpotifyAppRemoteBridge {
             override fun onFailure(throwable: Throwable) {
                 Log.e(TAG, "Spotify App Remote connection failed", throwable)
                 val details = generateSequence(throwable as Throwable?) { it.cause }.take(3).joinToString(" <- ") { error -> error.javaClass.name + (error.message?.let { ": " + it } ?: "") }
-                Toast.makeText(activity, "Spotify error: $details", Toast.LENGTH_LONG).show()
+                val frame = throwable.stackTrace.firstOrNull { !it.className.startsWith("android.") }?.toString().orEmpty()
+                Toast.makeText(activity, "Spotify error: $details; at $frame", Toast.LENGTH_LONG).show()
                 remote = null
                 pendingAction = null
             }
