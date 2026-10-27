@@ -403,7 +403,9 @@ object SpotifyAppRemoteBridge {
             object : MediaBrowser.ConnectionCallback() {
                 override fun onConnected() {
                     try {
-                        val controller = MediaController(activity, browser.sessionToken)
+                        val sessionToken = mediaBrowser?.sessionToken
+                            ?: throw IllegalStateException("Spotify MediaBrowser session token is unavailable")
+                        val controller = MediaController(activity, sessionToken)
                         mediaController = controller
                         controller.registerCallback(mediaControllerCallback)
                         controller.metadata?.let { updateTrackMetadata(it) }
