@@ -53,18 +53,12 @@ object SpotifyAppRemoteBridge {
         activity.runOnUiThread {
             Log.i(TAG, "Handling action=$action on UI thread")
             Toast.makeText(activity, "Music Integrations: botón recibido", Toast.LENGTH_SHORT).show()
-            // Preferred fallback: Android's active media session, avoiding Spotify App Remote.
-            // If notification access is missing, this opens the system page so the user can grant it.
-            if (SpotifyMediaSessionFallback.handleAction(activity, action)) {
-                Log.i(TAG, "Handled action=$action through Android media-session fallback")
+            val connected = remote
+            if (connected != null && connected.isConnected) {
+                performAction(connected, action)
             } else {
-                val connected = remote
-                if (connected != null && connected.isConnected) {
-                    performAction(connected, action)
-                } else {
-                    pendingAction = action
-                    connect(activity)
-                }
+                pendingAction = action
+                connect(activity)
             }
         }
         return true
