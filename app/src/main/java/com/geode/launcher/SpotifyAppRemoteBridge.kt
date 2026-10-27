@@ -240,9 +240,49 @@ object SpotifyAppRemoteBridge {
                     }
                     "${info.versionName} (${info.longVersionCode})"
                 }.getOrDefault("unknown")
+
+                val appSigningReport = runCatching {
+                    val flags = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                        android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+                    } else {
+                        @Suppress("DEPRECATION")
+                        android.content.pm.PackageManager.GET_SIGNATURES
+                    }
+                    val info = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        pm.getPackageInfo(activity.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(flags.toLong()))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.getPackageInfo(activity.packageName, flags)
+                    }
+                    val signatures = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                        info.signingInfo?.apkContentsSigners
+                    } else {
+                        @Suppress("DEPRECATION")
+                        info.signatures
+                    }
+                    val sha1 = signatures.orEmpty().joinToString("; ") { signature ->
+                        java.security.MessageDigest.getInstance("SHA-1")
+                            .digest(signature.toByteArray())
+                            .joinToString(":") { byte -> "%02X".format(byte) }
+                    }
+                    "Installed launcher signing SHA-1: ${sha1.ifBlank { "unavailable" }}"
+                }.getOrElse { "Installed launcher signing SHA-1 check failed: ${it.javaClass.name}: ${it.message}" }
+                val explicitRemoteServiceReport = runCatching {
+                    val component = android.content.ComponentName(
+                        "com.spotify.music",
+                        "com.spotify.interapp.service.service.AppProtocolRemoteService"
+                    )
+                    val service = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        pm.getServiceInfo(component, android.content.pm.PackageManager.ComponentInfoFlags.of(0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.getServiceInfo(component, 0)
+                    }
+                    "Explicit App Remote service lookup: FOUND; component=${service.packageName}/${service.name}, exported=${service.exported}, enabled=${service.enabled}, permission=${service.permission ?: "none"}, process=${service.processName ?: "default"}"
+                }.getOrElse { "Explicit App Remote service lookup: FAILED; ${it.javaClass.name}: ${it.message}" }
                 val platformReport = "Android=${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT}), device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, launcher=${activity.packageName} $appVersion, App Remote AAR=0.8.0"
                 val spotifyLogs = captureSpotifyLogs()
-                val diagnostic = "Spotify App Remote connection failed\n\n$platformReport\nSDK detects Spotify (Activity context): $sdkDetectsSpotify\nSDK detects Spotify (Application context): $sdkDetectsSpotifyFromAppContext\nLaunchable: $launchable\n$packageManagerProbe\n\n=== Spotify launcher activity resolution ===\n$launcherResolution\n\n=== Spotify declared services ===\n$serviceReport\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
+                val diagnostic = "Spotify App Remote connection failed\n\n$platformReport\nSDK detects Spotify (Activity context): $sdkDetectsSpotify\nSDK detects Spotify (Application context): $sdkDetectsSpotifyFromAppContext\nLaunchable: $launchable\n$packageManagerProbe\n$appSigningReport\n$explicitRemoteServiceReport\n\n=== Spotify launcher activity resolution ===\n$launcherResolution\n\n=== Spotify declared services ===\n$serviceReport\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
                 Log.e(TAG, diagnostic, throwable)
                 AlertDialog.Builder(activity)
                     .setTitle("Diagnóstico de Spotify")
