@@ -1,6 +1,11 @@
 package com.geode.launcher
 
 import android.app.AlertDialog
+import android.content.ComponentName
+import android.media.MediaMetadata
+import android.media.browse.MediaBrowser
+import android.media.session.MediaController
+import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -24,6 +29,8 @@ object SpotifyAppRemoteBridge {
 
     @Volatile private var activityRef: WeakReference<GeometryDashActivity>? = null
     @Volatile private var remote: SpotifyAppRemote? = null
+    @Volatile private var mediaBrowser: MediaBrowser? = null
+    @Volatile private var mediaController: MediaController? = null
     @Volatile private var pendingAction: Int? = null
     @Volatile private var foregroundRetryUsed = false
     @Volatile private var playing = false
@@ -38,6 +45,10 @@ object SpotifyAppRemoteBridge {
             remote = null
             pendingAction = null
             if (oldRemote != null) SpotifyAppRemote.disconnect(oldRemote)
+            runCatching { mediaController?.unregisterCallback(mediaControllerCallback) }
+            mediaController = null
+            runCatching { mediaBrowser?.disconnect() }
+            mediaBrowser = null
         }
     }
 
@@ -59,6 +70,8 @@ object SpotifyAppRemoteBridge {
             val connected = remote
             if (connected != null && connected.isConnected) {
                 performAction(connected, action)
+            } else if (mediaController != null) {
+                performMediaControllerAction(action)
             } else {
                 pendingAction = action
                 connect(activity)
@@ -153,6 +166,14 @@ object SpotifyAppRemoteBridge {
 
             override fun onFailure(throwable: Throwable) {
                 Log.e(TAG, "Spotify App Remote connection failed", throwable)
+
+                val isMissingSpotifyForSdk = generateSequence(throwable as Throwable?) { it.cause }
+                    .any { it.javaClass.name == "com.spotify.android.appremote.api.error.CouldNotFindSpotifyApp" }
+                if (isMissingSpotifyForSdk) {
+                    Log.w(TAG, "App Remote locator rejected the installed Spotify app; trying its exported MediaBrowserService without NotificationListener access")
+                    connectMediaBrowserFallback(activity)
+                    return
+                }
 
                 // Some Spotify builds only expose the App Remote endpoint reliably
                 // while Spotify itself is foregrounded. Try that once before showing
@@ -354,6 +375,125 @@ object SpotifyAppRemoteBridge {
                 pendingAction = null
             }
         })
+    }
+
+    /**
+     * Fallback for Spotify versions that App Remote's own locator fails to recognize.
+     * Uses Spotify's exported MediaBrowserService and Android media session controls;
+     * it does not request NotificationListener access.
+     */
+    private fun connectMediaBrowserFallback(activity: GeometryDashActivity) {
+        val existing = mediaBrowser
+        if (existing?.isConnected == true && mediaController != null) {
+            pendingAction?.let { action ->
+                pendingAction = null
+                performMediaControllerAction(action)
+            }
+            return
+        }
+
+        runCatching { mediaBrowser?.disconnect() }
+        mediaController = null
+        val browser = MediaBrowser(
+            activity,
+            ComponentName(
+                "com.spotify.music",
+                "com.spotify.mediabrowserservice.mediabrowser.SpotifyMediaBrowserService"
+            ),
+            object : MediaBrowser.ConnectionCallback() {
+                override fun onConnected() {
+                    try {
+                        val controller = MediaController(activity, browser.sessionToken)
+                        mediaController = controller
+                        controller.registerCallback(mediaControllerCallback)
+                        controller.metadata?.let { updateTrackMetadata(it) }
+                        controller.playbackState?.let { updatePlaybackState(it) }
+                        Log.i(TAG, "Spotify MediaBrowser fallback connected")
+                        activity.runOnUiThread {
+                            Toast.makeText(activity, "Music Integrations: Spotify conectado (modo compatible)", Toast.LENGTH_SHORT).show()
+                        }
+                        pendingAction?.let { action ->
+                            pendingAction = null
+                            performMediaControllerAction(action)
+                        }
+                    } catch (error: Throwable) {
+                        Log.e(TAG, "Could not create Spotify MediaController from browser session", error)
+                        pendingAction = null
+                        activity.runOnUiThread {
+                            Toast.makeText(activity, "Spotify rechazó la sesión multimedia; revisa el log", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+
+                override fun onConnectionFailed() {
+                    Log.e(TAG, "Spotify MediaBrowser fallback connection failed; service may deny external clients or use a different component")
+                    mediaBrowser = null
+                    mediaController = null
+                    pendingAction = null
+                    activity.runOnUiThread {
+                        Toast.makeText(activity, "Spotify: App Remote y control multimedia no disponibles", Toast.LENGTH_LONG).show()
+                    }
+                }
+
+                override fun onConnectionSuspended() {
+                    Log.w(TAG, "Spotify MediaBrowser connection suspended")
+                    mediaController = null
+                }
+            },
+            null
+        )
+        mediaBrowser = browser
+        runCatching { browser.connect() }
+            .onFailure { error ->
+                Log.e(TAG, "Could not start Spotify MediaBrowser fallback", error)
+                mediaBrowser = null
+                mediaController = null
+                pendingAction = null
+                activity.runOnUiThread {
+                    Toast.makeText(activity, "No se pudo iniciar el control multimedia de Spotify", Toast.LENGTH_LONG).show()
+                }
+            }
+    }
+
+    private val mediaControllerCallback = object : MediaController.Callback() {
+        override fun onMetadataChanged(metadata: MediaMetadata?) {
+            metadata?.let { updateTrackMetadata(it) }
+        }
+
+        override fun onPlaybackStateChanged(state: PlaybackState?) {
+            state?.let { updatePlaybackState(it) }
+        }
+    }
+
+    private fun updateTrackMetadata(metadata: MediaMetadata) {
+        songTitle = metadata.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
+        songArtist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST)
+            ?: metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
+    }
+
+    private fun updatePlaybackState(state: PlaybackState) {
+        playing = state.state == PlaybackState.STATE_PLAYING ||
+            state.state == PlaybackState.STATE_BUFFERING
+    }
+
+    private fun performMediaControllerAction(action: Int) {
+        val controller = mediaController
+        if (controller == null) {
+            Log.w(TAG, "No Spotify MediaController available for action=$action")
+            return
+        }
+        runCatching {
+            when (action) {
+                0 -> controller.transportControls.pause()
+                1 -> controller.transportControls.play()
+                2 -> controller.transportControls.skipToNext()
+                3 -> controller.transportControls.skipToPrevious()
+                else -> return
+            }
+            Log.i(TAG, "Spotify media-session command $action dispatched")
+        }.onFailure { error ->
+            Log.e(TAG, "Spotify media-session command $action failed", error)
+        }
     }
 
     private fun performAction(appRemote: SpotifyAppRemote, action: Int) {
