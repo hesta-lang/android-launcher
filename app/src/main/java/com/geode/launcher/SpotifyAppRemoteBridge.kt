@@ -1,6 +1,8 @@
 package com.geode.launcher
 
 import android.app.AlertDialog
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import com.spotify.android.appremote.api.ConnectionParams
@@ -23,6 +25,7 @@ object SpotifyAppRemoteBridge {
     @Volatile private var activityRef: WeakReference<GeometryDashActivity>? = null
     @Volatile private var remote: SpotifyAppRemote? = null
     @Volatile private var pendingAction: Int? = null
+    @Volatile private var foregroundRetryUsed = false
     @Volatile private var playing = false
     @Volatile private var songTitle = ""
     @Volatile private var songArtist = ""
@@ -129,6 +132,7 @@ object SpotifyAppRemoteBridge {
         SpotifyAppRemote.connect(activity, params, object : Connector.ConnectionListener {
             override fun onConnected(spotifyAppRemote: SpotifyAppRemote) {
                 Log.i(TAG, "Spotify App Remote connected")
+                foregroundRetryUsed = false
                 Toast.makeText(activity, "Music Integrations: Spotify conectado", Toast.LENGTH_SHORT).show()
                 remote = spotifyAppRemote
                 spotifyAppRemote.playerApi.subscribeToPlayerState()
@@ -149,6 +153,39 @@ object SpotifyAppRemoteBridge {
 
             override fun onFailure(throwable: Throwable) {
                 Log.e(TAG, "Spotify App Remote connection failed", throwable)
+
+                // Some Spotify builds only expose the App Remote endpoint reliably
+                // while Spotify itself is foregrounded. Try that once before showing
+                // the full diagnostic; do not loop if the retry fails.
+                val isMissingSpotify = generateSequence(throwable as Throwable?) { it.cause }
+                    .any { it.javaClass.name == "com.spotify.android.appremote.api.error.CouldNotFindSpotifyApp" }
+                if (isMissingSpotify && !foregroundRetryUsed) {
+                    val launchIntent = runCatching {
+                        activity.packageManager.getLaunchIntentForPackage("com.spotify.music")
+                    }.getOrNull()
+                    if (launchIntent != null) {
+                        foregroundRetryUsed = true
+                        Toast.makeText(
+                            activity,
+                            "Abriendo Spotify para reintentar la conexión…",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        runCatching { activity.startActivity(launchIntent) }
+                            .onSuccess {
+                                Handler(Looper.getMainLooper()).postDelayed({
+                                    if (activityRef?.get() === activity && remote?.isConnected != true) {
+                                        connect(activity)
+                                    }
+                                }, 1800L)
+                            }
+                            .onFailure { retryError ->
+                                Log.w(TAG, "Could not foreground Spotify for one retry", retryError)
+                                foregroundRetryUsed = false
+                            }
+                        if (foregroundRetryUsed) return
+                    }
+                }
+
                 val causes = generateSequence(throwable as Throwable?) { it.cause }
                     .take(4)
                     .mapIndexed { index, error ->
