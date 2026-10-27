@@ -163,8 +163,22 @@ object SpotifyAppRemoteBridge {
                     .joinToString("\n\n")
                 val pm = activity.packageManager
                 val sdkDetectsSpotify = runCatching { SpotifyAppRemote.isSpotifyInstalled(activity) }
-                    .onFailure { Log.e(TAG, "isSpotifyInstalled check threw", it) }
+                    .onFailure { Log.e(TAG, "isSpotifyInstalled(activity) check threw", it) }
                     .getOrDefault(false)
+                val sdkDetectsSpotifyFromAppContext = runCatching {
+                    SpotifyAppRemote.isSpotifyInstalled(activity.applicationContext)
+                }.onFailure { Log.e(TAG, "isSpotifyInstalled(applicationContext) check threw", it) }
+                    .getOrDefault(false)
+                val packageManagerProbe = runCatching {
+                    val info = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        pm.getPackageInfo("com.spotify.music", android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.getPackageInfo("com.spotify.music", 0)
+                    }
+                    val appInfo = info.applicationInfo
+                    "PackageManager sees Spotify: package=${info.packageName}, version=${info.versionName}, versionCode=${info.longVersionCode}, enabled=${appInfo?.enabled}, uid=${appInfo?.uid}, sourceDir=${appInfo?.sourceDir}"
+                }.getOrElse { "PackageManager Spotify probe failed: ${it.javaClass.name}: ${it.message}" }
                 val packageNames = listOf(
                     "com.spotify.music",
                     "com.spotify.music.debug",
@@ -228,7 +242,7 @@ object SpotifyAppRemoteBridge {
                 }.getOrDefault("unknown")
                 val platformReport = "Android=${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT}), device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, launcher=${activity.packageName} $appVersion, App Remote AAR=0.8.0"
                 val spotifyLogs = captureSpotifyLogs()
-                val diagnostic = "Spotify App Remote connection failed\n\n$platformReport\nSDK detects Spotify: $sdkDetectsSpotify\nLaunchable: $launchable\n\n=== Spotify launcher activity resolution ===\n$launcherResolution\n\n=== Spotify declared services ===\n$serviceReport\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
+                val diagnostic = "Spotify App Remote connection failed\n\n$platformReport\nSDK detects Spotify (Activity context): $sdkDetectsSpotify\nSDK detects Spotify (Application context): $sdkDetectsSpotifyFromAppContext\nLaunchable: $launchable\n$packageManagerProbe\n\n=== Spotify launcher activity resolution ===\n$launcherResolution\n\n=== Spotify declared services ===\n$serviceReport\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
                 Log.e(TAG, diagnostic, throwable)
                 AlertDialog.Builder(activity)
                     .setTitle("Diagnóstico de Spotify")
