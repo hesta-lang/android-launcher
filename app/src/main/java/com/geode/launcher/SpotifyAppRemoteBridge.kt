@@ -218,6 +218,25 @@ object SpotifyAppRemoteBridge {
                         "activity=${info?.name}, exported=${info?.exported}, enabled=${info?.enabled}, package=${info?.packageName}"
                     }
                 }.getOrElse { "Launcher resolution failed: ${it.javaClass.name}: ${it.message}" }
+                val spotifyIntentProbe = runCatching {
+                    val probes = listOf(
+                        "spotify:" to android.net.Uri.parse("spotify:"),
+                        "spotify://open" to android.net.Uri.parse("spotify://open"),
+                        "https://open.spotify.com/" to android.net.Uri.parse("https://open.spotify.com/"),
+                        "market://details?id=com.spotify.music" to android.net.Uri.parse("market://details?id=com.spotify.music")
+                    )
+                    probes.joinToString("\n") { (label, uri) ->
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                        val matches = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            pm.queryIntentActivities(intent, android.content.pm.PackageManager.ResolveInfoFlags.of(0))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            pm.queryIntentActivities(intent, 0)
+                        }
+                        val spotifyMatches = matches.filter { it.activityInfo?.packageName == "com.spotify.music" }
+                        "$label -> totalMatches=${matches.size}, spotifyMatches=${spotifyMatches.joinToString { it.activityInfo?.name ?: "unknown" }.ifBlank { "none" }}"
+                    }
+                }.getOrElse { "Spotify URI intent probe failed: ${it.javaClass.name}: ${it.message}" }
                 val serviceReport = runCatching {
                     val info = if (android.os.Build.VERSION.SDK_INT >= 33) {
                         pm.getPackageInfo("com.spotify.music", android.content.pm.PackageManager.PackageInfoFlags.of(android.content.pm.PackageManager.GET_SERVICES.toLong()))
@@ -282,7 +301,7 @@ object SpotifyAppRemoteBridge {
                 }.getOrElse { "Explicit App Remote service lookup: FAILED; ${it.javaClass.name}: ${it.message}" }
                 val platformReport = "Android=${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT}), device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, launcher=${activity.packageName} $appVersion, App Remote AAR=0.8.0"
                 val spotifyLogs = captureSpotifyLogs()
-                val diagnostic = "Spotify App Remote connection failed\n\n$platformReport\nSDK detects Spotify (Activity context): $sdkDetectsSpotify\nSDK detects Spotify (Application context): $sdkDetectsSpotifyFromAppContext\nLaunchable: $launchable\n$packageManagerProbe\n$appSigningReport\n$explicitRemoteServiceReport\n\n=== Spotify launcher activity resolution ===\n$launcherResolution\n\n=== Spotify declared services ===\n$serviceReport\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
+                val diagnostic = "Spotify App Remote connection failed\n\n$platformReport\nSDK detects Spotify (Activity context): $sdkDetectsSpotify\nSDK detects Spotify (Application context): $sdkDetectsSpotifyFromAppContext\nLaunchable: $launchable\n$packageManagerProbe\n$appSigningReport\n$explicitRemoteServiceReport\n\n=== Spotify launcher activity resolution ===\n$launcherResolution\n\n=== Spotify URI intent resolution ===\n$spotifyIntentProbe\n\n=== Spotify declared services ===\n$serviceReport\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
                 Log.e(TAG, diagnostic, throwable)
                 AlertDialog.Builder(activity)
                     .setTitle("Diagnóstico de Spotify")
