@@ -398,7 +398,7 @@ object SpotifyAppRemoteBridge {
             activity,
             ComponentName(
                 "com.spotify.music",
-                "com.spotify.mediabrowserservice.mediabrowser.SpotifyMediaBrowserService"
+                "com.spotify.mediabrowserservice.mediabrowserservice.SpotifyMediaBrowserService"
             ),
             object : MediaBrowser.ConnectionCallback() {
                 override fun onConnected() {
