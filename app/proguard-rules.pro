@@ -15,3 +15,14 @@
 # Preserve Spotify App Remote exception names so connection diagnostics remain readable.
 -keep class com.spotify.android.appremote.api.error.** { *; }
 -keep class com.spotify.protocol.error.** { *; }
+
+# Keep the complete Spotify App Remote implementation in minified release APKs.
+# The SDK performs internal service discovery and protocol dispatch; preserving
+# only public API and exception classes can break reflective/internal lookup.
+-keep class com.spotify.android.appremote.** { *; }
+-keep interface com.spotify.android.appremote.** { *; }
+-keep class com.spotify.protocol.** { *; }
+-keep interface com.spotify.protocol.** { *; }
+
+# Preserve generic signatures and runtime annotations used by SDK internals.
+-keepattributes Signature,InnerClasses,EnclosingMethod,RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations,AnnotationDefault
