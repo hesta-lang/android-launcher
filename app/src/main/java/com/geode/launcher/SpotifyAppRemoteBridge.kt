@@ -221,6 +221,23 @@ object SpotifyAppRemoteBridge {
                     }, 1800L)
                 }
 
+                override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                    if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                        val currentActivity = activityRef?.get() ?: return
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            if (activityRef?.get() !== currentActivity || hasValidatedInternet(currentActivity)) return@postDelayed
+                            if (remote?.isConnected == true && playing) {
+                                remote?.playerApi?.pause()
+                                    ?.setErrorCallback { error -> Log.w(TAG, "Could not pause Spotify without validated Internet", error) }
+                            }
+                            if (OfflineMusicPlayer.playOrResume(currentActivity)) {
+                                playing = OfflineMusicPlayer.isPlaying()
+                                Log.i(TAG, "Network lost validated Internet; started local fallback")
+                            }
+                        }, 1800L)
+                    }
+                }
+
                 override fun onAvailable(network: Network) {
                     val currentActivity = activityRef?.get() ?: return
                     Handler(Looper.getMainLooper()).postDelayed({
