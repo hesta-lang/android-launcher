@@ -6,6 +6,9 @@ import android.media.MediaMetadata
 import android.media.browse.MediaBrowser
 import android.media.session.MediaController
 import android.media.session.PlaybackState
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -42,10 +45,13 @@ object SpotifyAppRemoteBridge {
     @Volatile private var currentTrackUri = ""
     @Volatile private var trackHistoryCursor = -1
     @Volatile private var lastAppRemoteFailure = "No App Remote failure recorded yet"
+    @Volatile private var connectivityManager: ConnectivityManager? = null
+    @Volatile private var networkCallbackRegistered = false
 
     @JvmStatic
     fun setActivity(activity: GeometryDashActivity?) {
         activityRef = activity?.let { WeakReference(it) }
+        if (activity != null) registerNetworkCallback(activity)
         if (activity == null) {
             val oldRemote = remote
             remote = null
@@ -74,6 +80,24 @@ object SpotifyAppRemoteBridge {
         }
         activity.runOnUiThread {
             Log.i(TAG, "Handling action=$action on UI thread")
+            if (OfflineMusicPlayer.isPlaying() || !hasValidatedInternet(activity)) {
+                val handled = when (action) {
+                    0 -> OfflineMusicPlayer.pause()
+                    1 -> OfflineMusicPlayer.playOrResume(activity)
+                    2 -> OfflineMusicPlayer.next()
+                    3 -> OfflineMusicPlayer.previous()
+                    else -> false
+                }
+                if (handled) {
+                    playing = OfflineMusicPlayer.isPlaying()
+                    Log.i(TAG, "Handled action=$action with local offline player")
+                    return@runOnUiThread
+                }
+                if (!hasValidatedInternet(activity)) {
+                    Toast.makeText(activity, "Sin Internet y sin canciones locales configuradas", Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+            }
             val connected = remote
             if (connected != null && connected.isConnected) {
                 performAction(connected, action)
@@ -163,6 +187,37 @@ object SpotifyAppRemoteBridge {
             "Explicit App Remote service: $remoteService"
     }
 
+    private fun hasValidatedInternet(context: android.content.Context): Boolean {
+        val manager = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val network = manager.activeNetwork ?: return false
+        val capabilities = manager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
+    private fun registerNetworkCallback(activity: GeometryDashActivity) {
+        val manager = activity.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return
+        connectivityManager = manager
+        if (networkCallbackRegistered) return
+        runCatching {
+            manager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    val currentActivity = activityRef?.get() ?: return
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        if (activityRef?.get() !== currentActivity || !hasValidatedInternet(currentActivity)) return@postDelayed
+                        if (OfflineMusicPlayer.isPlaying()) {
+                            Log.i(TAG, "Internet returned while local music was playing; reconnecting to Spotify")
+                            connect(currentActivity)
+                        }
+                    }, 1500L)
+                }
+            })
+            networkCallbackRegistered = true
+        }.onFailure { Log.w(TAG, "Could not register network callback", it) }
+    }
+
     private fun connect(activity: GeometryDashActivity) {
         Log.i(TAG, "Connecting to Spotify App Remote")
         runCatching { SpotifyAppRemote.setDebugMode(true) }
@@ -194,6 +249,17 @@ object SpotifyAppRemoteBridge {
                 foregroundRetryUsed = false
                 Toast.makeText(activity, "Music Integrations: Spotify conectado", Toast.LENGTH_SHORT).show()
                 remote = spotifyAppRemote
+                if (OfflineMusicPlayer.isPlaying()) {
+                    spotifyAppRemote.playerApi.resume()
+                        .setResultCallback {
+                            OfflineMusicPlayer.stop()
+                            playing = true
+                            Log.i(TAG, "Spotify resumed after network recovery; local fallback stopped")
+                        }
+                        .setErrorCallback { error ->
+                            Log.w(TAG, "Spotify resume failed after network recovery; keeping local music", error)
+                        }
+                }
                 spotifyAppRemote.playerApi.subscribeToPlayerState()
                     .setEventCallback { state: PlayerState ->
                         playing = state.isPaused.not()
@@ -253,6 +319,12 @@ object SpotifyAppRemoteBridge {
                             }
                         if (foregroundRetryUsed) return
                     }
+                }
+
+                if (!hasValidatedInternet(activity) && OfflineMusicPlayer.playOrResume(activity)) {
+                    Log.i(TAG, "No validated Internet; started local music fallback")
+                    playing = OfflineMusicPlayer.isPlaying()
+                    return
                 }
 
                 if (isMissingSpotifyForSdk) {
