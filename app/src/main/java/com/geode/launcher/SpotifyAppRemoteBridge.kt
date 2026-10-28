@@ -428,12 +428,35 @@ object SpotifyAppRemoteBridge {
                 }
 
                 override fun onConnectionFailed() {
-                    Log.e(TAG, "Spotify MediaBrowser fallback connection failed; service may deny external clients or use a different component")
+                    val diagnostic = buildString {
+                        appendLine("Spotify MediaBrowser fallback: CONNECTION FAILED")
+                        appendLine("Android: ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})")
+                        appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                        appendLine("Launcher: ${activity.packageName}")
+                        appendLine("Spotify component: com.spotify.music/com.spotify.mediabrowserservice.mediabrowserservice.SpotifyMediaBrowserService")
+                        appendLine("Spotify App Remote connected: ${remote?.isConnected == true}")
+                        appendLine("MediaBrowser connected: ${mediaBrowser?.isConnected == true}")
+                        appendLine("MediaController available: ${mediaController != null}")
+                        appendLine("Pending action: ${pendingAction?.toString() ?: "none"}")
+                        appendLine("Track title currently known: ${songTitle.ifBlank { "(empty)" }}")
+                        appendLine()
+                        append("Spotify's MediaBrowser service rejected or failed the external connection. This callback does not expose a more specific Android error.")
+                    }
+                    Log.e(TAG, diagnostic)
                     mediaBrowser = null
                     mediaController = null
                     pendingAction = null
                     activity.runOnUiThread {
-                        Toast.makeText(activity, "Spotify: App Remote y control multimedia no disponibles", Toast.LENGTH_LONG).show()
+                        AlertDialog.Builder(activity)
+                            .setTitle("Diagnóstico del control Spotify")
+                            .setMessage(diagnostic)
+                            .setPositiveButton("Copiar diagnóstico") { _, _ ->
+                                val clipboard = activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Spotify MediaBrowser diagnostic", diagnostic))
+                                Toast.makeText(activity, "Diagnóstico copiado", Toast.LENGTH_SHORT).show()
+                            }
+                            .setNegativeButton("Cerrar", null)
+                            .show()
                     }
                 }
 
