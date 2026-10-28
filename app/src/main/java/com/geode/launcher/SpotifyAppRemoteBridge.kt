@@ -203,6 +203,24 @@ object SpotifyAppRemoteBridge {
         if (networkCallbackRegistered) return
         runCatching {
             manager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onLost(network: Network) {
+                    val currentActivity = activityRef?.get() ?: return
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        if (activityRef?.get() !== currentActivity || hasValidatedInternet(currentActivity)) return@postDelayed
+                        if (remote?.isConnected == true && playing) {
+                            remote?.playerApi?.pause()
+                                ?.setErrorCallback { error -> Log.w(TAG, "Could not pause Spotify after Internet loss", error) }
+                        }
+                        if (OfflineMusicPlayer.playOrResume(currentActivity)) {
+                            playing = OfflineMusicPlayer.isPlaying()
+                            Log.i(TAG, "Internet lost; started local music fallback")
+                            Toast.makeText(currentActivity, "Sin Internet: usando música local", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Log.w(TAG, "Internet lost but no playable local folder is configured")
+                        }
+                    }, 1800L)
+                }
+
                 override fun onAvailable(network: Network) {
                     val currentActivity = activityRef?.get() ?: return
                     Handler(Looper.getMainLooper()).postDelayed({
