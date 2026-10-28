@@ -74,7 +74,6 @@ object SpotifyAppRemoteBridge {
         }
         activity.runOnUiThread {
             Log.i(TAG, "Handling action=$action on UI thread")
-            Toast.makeText(activity, "Music Integrations: botón recibido", Toast.LENGTH_SHORT).show()
             val connected = remote
             if (connected != null && connected.isConnected) {
                 performAction(connected, action)
