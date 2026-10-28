@@ -12,7 +12,6 @@ import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.widget.Toast
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
 import com.spotify.android.appremote.api.SpotifyAppRemote
@@ -94,7 +93,6 @@ object SpotifyAppRemoteBridge {
                     return@runOnUiThread
                 }
                 if (!hasValidatedInternet(activity)) {
-                    Toast.makeText(activity, "Sin Internet y sin canciones locales configuradas", Toast.LENGTH_LONG).show()
                     return@runOnUiThread
                 }
             }
@@ -214,7 +212,6 @@ object SpotifyAppRemoteBridge {
                         if (OfflineMusicPlayer.playOrResume(currentActivity)) {
                             playing = OfflineMusicPlayer.isPlaying()
                             Log.i(TAG, "Internet lost; started local music fallback")
-                            Toast.makeText(currentActivity, "Sin Internet: usando música local", Toast.LENGTH_SHORT).show()
                         } else {
                             Log.w(TAG, "Internet lost but no playable local folder is configured")
                         }
@@ -257,7 +254,6 @@ object SpotifyAppRemoteBridge {
         Log.i(TAG, "Connecting to Spotify App Remote")
         runCatching { SpotifyAppRemote.setDebugMode(true) }
             .onFailure { Log.w(TAG, "Could not enable Spotify SDK debug logging", it) }
-        Toast.makeText(activity, "Music Integrations: conectando con Spotify…", Toast.LENGTH_SHORT).show()
         if (remote?.isConnected == true) {
             pendingAction?.let { action ->
                 pendingAction = null
@@ -282,7 +278,6 @@ object SpotifyAppRemoteBridge {
                 connectionInProgress = false
                 Log.i(TAG, "Spotify App Remote connected")
                 foregroundRetryUsed = false
-                Toast.makeText(activity, "Music Integrations: Spotify conectado", Toast.LENGTH_SHORT).show()
                 remote = spotifyAppRemote
                 if (OfflineMusicPlayer.isPlaying()) {
                     spotifyAppRemote.playerApi.resume()
@@ -334,11 +329,6 @@ object SpotifyAppRemoteBridge {
                     }.getOrNull()
                     if (launchIntent != null) {
                         foregroundRetryUsed = true
-                        Toast.makeText(
-                            activity,
-                            "Abriendo Spotify para reintentar la conexión…",
-                            Toast.LENGTH_LONG
-                        ).show()
                         runCatching { activity.startActivity(launchIntent) }
                             .onSuccess {
                                 Handler(Looper.getMainLooper()).postDelayed({
@@ -528,7 +518,6 @@ object SpotifyAppRemoteBridge {
                     .setPositiveButton("Copiar y cerrar") { _, _ ->
                         val clipboard = activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Spotify diagnostic", diagnostic))
-                        Toast.makeText(activity, "Diagnóstico copiado", Toast.LENGTH_SHORT).show()
                     }
                     .setNegativeButton("Cerrar", null)
                     .show()
@@ -573,7 +562,6 @@ object SpotifyAppRemoteBridge {
                         controller.playbackState?.let { updatePlaybackState(it) }
                         Log.i(TAG, "Spotify MediaBrowser fallback connected")
                         activity.runOnUiThread {
-                            Toast.makeText(activity, "Music Integrations: Spotify conectado (modo compatible)", Toast.LENGTH_SHORT).show()
                         }
                         pendingAction?.let { action ->
                             pendingAction = null
@@ -583,7 +571,6 @@ object SpotifyAppRemoteBridge {
                         Log.e(TAG, "Could not create Spotify MediaController from browser session", error)
                         pendingAction = null
                         activity.runOnUiThread {
-                            Toast.makeText(activity, "Spotify rechazó la sesión multimedia; revisa el log", Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -624,7 +611,6 @@ object SpotifyAppRemoteBridge {
                             .setPositiveButton("Copiar diagnóstico") { _, _ ->
                                 val clipboard = activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Spotify MediaBrowser diagnostic", diagnostic))
-                                Toast.makeText(activity, "Diagnóstico copiado", Toast.LENGTH_SHORT).show()
                             }
                             .setNegativeButton("Cerrar", null)
                             .show()
@@ -646,7 +632,6 @@ object SpotifyAppRemoteBridge {
                 mediaController = null
                 pendingAction = null
                 activity.runOnUiThread {
-                    Toast.makeText(activity, "No se pudo iniciar el control multimedia de Spotify", Toast.LENGTH_LONG).show()
                 }
             }
     }
