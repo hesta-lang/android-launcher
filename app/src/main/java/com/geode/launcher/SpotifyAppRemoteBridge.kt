@@ -33,6 +33,7 @@ object SpotifyAppRemoteBridge {
     @Volatile private var mediaController: MediaController? = null
     @Volatile private var pendingAction: Int? = null
     @Volatile private var foregroundRetryUsed = false
+    @Volatile private var connectionInProgress = false
     @Volatile private var playing = false
     @Volatile private var songTitle = ""
     @Volatile private var songArtist = ""
@@ -45,6 +46,8 @@ object SpotifyAppRemoteBridge {
             val oldRemote = remote
             remote = null
             pendingAction = null
+            connectionInProgress = false
+            foregroundRetryUsed = false
             if (oldRemote != null) SpotifyAppRemote.disconnect(oldRemote)
             runCatching { mediaController?.unregisterCallback(mediaControllerCallback) }
             mediaController = null
@@ -138,6 +141,12 @@ object SpotifyAppRemoteBridge {
             return
         }
 
+        if (connectionInProgress) {
+            Log.i(TAG, "Spotify App Remote connection already in progress; coalescing request")
+            return
+        }
+        connectionInProgress = true
+
         val params = ConnectionParams.Builder(CLIENT_ID)
             .setRedirectUri(REDIRECT_URI)
             .showAuthView(true)
@@ -145,6 +154,7 @@ object SpotifyAppRemoteBridge {
 
         SpotifyAppRemote.connect(activity, params, object : Connector.ConnectionListener {
             override fun onConnected(spotifyAppRemote: SpotifyAppRemote) {
+                connectionInProgress = false
                 Log.i(TAG, "Spotify App Remote connected")
                 foregroundRetryUsed = false
                 Toast.makeText(activity, "Music Integrations: Spotify conectado", Toast.LENGTH_SHORT).show()
@@ -166,6 +176,7 @@ object SpotifyAppRemoteBridge {
             }
 
             override fun onFailure(throwable: Throwable) {
+                connectionInProgress = false
                 Log.e(TAG, "Spotify App Remote connection failed", throwable)
                 lastAppRemoteFailure = generateSequence(throwable as Throwable?) { it.cause }
                     .take(6)
@@ -410,7 +421,7 @@ object SpotifyAppRemoteBridge {
             object : MediaBrowser.ConnectionCallback() {
                 override fun onConnected() {
                     try {
-                        val sessionToken = mediaBrowser?.sessionToken
+                        val sessionToken = browser.sessionToken
                             ?: throw IllegalStateException("Spotify MediaBrowser session token is unavailable")
                         val controller = MediaController(activity, sessionToken)
                         mediaController = controller
