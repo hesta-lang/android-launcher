@@ -12,6 +12,8 @@ import android.text.format.DateUtils
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -726,6 +728,21 @@ fun SettingsScreen(
 ) {
     val resources = LocalResources.current
 
+    val context = LocalContext.current
+    val folderPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            runCatching { com.geode.launcher.OfflineMusicPlayer.saveFolder(context, uri) }
+                .onSuccess {
+                    Toast.makeText(context, "Carpeta de música local guardada", Toast.LENGTH_SHORT).show()
+                }
+                .onFailure {
+                    Toast.makeText(context, "No se pudo guardar el permiso de la carpeta", Toast.LENGTH_LONG).show()
+                }
+        }
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
     var showUpdateInProgress by remember { mutableStateOf(false) }
 
@@ -781,6 +798,14 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                OptionsGroup(title = "Music Integrations") {
+                    OptionsButton(
+                        title = "Carpeta de música sin conexión",
+                        description = com.geode.launcher.OfflineMusicPlayer.selectedFolder(context)?.toString()
+                            ?: "Elige una carpeta con archivos MP3, M4A, OGG, WAV o FLAC para usarlos cuando Spotify no esté disponible.",
+                        onClick = { folderPicker.launch(com.geode.launcher.OfflineMusicPlayer.selectedFolder(context)) }
+                    )
+                }
                 GeneralSettingsGroup()
                 GameplaySettingsGroup()
 
