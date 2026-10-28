@@ -169,18 +169,11 @@ object SpotifyAppRemoteBridge {
 
                 val isMissingSpotifyForSdk = generateSequence(throwable as Throwable?) { it.cause }
                     .any { it.javaClass.name == "com.spotify.android.appremote.api.error.CouldNotFindSpotifyApp" }
-                if (isMissingSpotifyForSdk) {
-                    Log.w(TAG, "App Remote locator rejected the installed Spotify app; trying its exported MediaBrowserService without NotificationListener access")
-                    connectMediaBrowserFallback(activity)
-                    return
-                }
 
-                // Some Spotify builds only expose the App Remote endpoint reliably
-                // while Spotify itself is foregrounded. Try that once before showing
-                // the full diagnostic; do not loop if the retry fails.
-                val isMissingSpotify = generateSequence(throwable as Throwable?) { it.cause }
-                    .any { it.javaClass.name == "com.spotify.android.appremote.api.error.CouldNotFindSpotifyApp" }
-                if (isMissingSpotify && !foregroundRetryUsed) {
+                // Try App Remote once with Spotify in the foreground before the
+                // MediaBrowser fallback. Previously the fallback returned early,
+                // making the foreground retry below unreachable for this exception.
+                if (isMissingSpotifyForSdk && !foregroundRetryUsed) {
                     val launchIntent = runCatching {
                         activity.packageManager.getLaunchIntentForPackage("com.spotify.music")
                     }.getOrNull()
@@ -202,9 +195,16 @@ object SpotifyAppRemoteBridge {
                             .onFailure { retryError ->
                                 Log.w(TAG, "Could not foreground Spotify for one retry", retryError)
                                 foregroundRetryUsed = false
+                                connectMediaBrowserFallback(activity)
                             }
                         if (foregroundRetryUsed) return
                     }
+                }
+
+                if (isMissingSpotifyForSdk) {
+                    Log.w(TAG, "Spotify App Remote locator still rejects the installed app after foreground retry; trying MediaBrowser fallback")
+                    connectMediaBrowserFallback(activity)
+                    return
                 }
 
                 val causes = generateSequence(throwable as Throwable?) { it.cause }
