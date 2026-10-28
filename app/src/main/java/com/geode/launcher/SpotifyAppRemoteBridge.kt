@@ -37,6 +37,10 @@ object SpotifyAppRemoteBridge {
     @Volatile private var playing = false
     @Volatile private var songTitle = ""
     @Volatile private var songArtist = ""
+    // Short in-memory history of Spotify track URIs observed during this session.
+    private val trackHistory = mutableListOf<String>()
+    @Volatile private var currentTrackUri = ""
+    @Volatile private var trackHistoryCursor = -1
     @Volatile private var lastAppRemoteFailure = "No App Remote failure recorded yet"
 
     @JvmStatic
@@ -196,6 +200,7 @@ object SpotifyAppRemoteBridge {
                         playing = state.isPaused.not()
                         songTitle = state.track?.name.orEmpty()
                         songArtist = state.track?.artists?.joinToString(", ") { it.name }.orEmpty()
+                        state.track?.uri?.let { rememberTrack(it) }
                     }
                     .setErrorCallback { error ->
                         Log.w(TAG, "Player state subscription failed", error)
@@ -554,11 +559,70 @@ object SpotifyAppRemoteBridge {
         songTitle = metadata.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
         songArtist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
+        metadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)?.let { rememberTrack(it) }
     }
 
     private fun updatePlaybackState(state: PlaybackState) {
         playing = state.state == PlaybackState.STATE_PLAYING ||
             state.state == PlaybackState.STATE_BUFFERING
+    }
+
+    /**
+     * Store a bounded history of track URIs. When available, replay the exact
+     * prior track; if Spotify does not expose a usable URI, use native Previous.
+     */
+    private fun rememberTrack(uri: String) {
+        if (!uri.startsWith("spotify:track:") || uri == currentTrackUri) return
+        synchronized(trackHistory) {
+            if (trackHistoryCursor >= 0 && trackHistoryCursor < trackHistory.lastIndex) {
+                trackHistory.subList(trackHistoryCursor + 1, trackHistory.size).clear()
+            }
+            if (trackHistory.lastOrNull() != uri) trackHistory.add(uri)
+            while (trackHistory.size > 30) trackHistory.removeAt(0)
+            trackHistoryCursor = trackHistory.lastIndex
+            currentTrackUri = uri
+        }
+        Log.d(TAG, "Recorded Spotify track in history")
+    }
+
+    private fun previousTrackUri(): String? = synchronized(trackHistory) {
+        if (trackHistoryCursor > 0 && trackHistoryCursor < trackHistory.size) {
+            trackHistoryCursor -= 1
+            trackHistory[trackHistoryCursor]
+        } else null
+    }
+
+    private fun playPreviousTrack(appRemote: SpotifyAppRemote) {
+        val previousUri = previousTrackUri()
+        if (previousUri == null) {
+            Log.i(TAG, "No previous track URI in local history; using Spotify skipPrevious")
+            appRemote.playerApi.skipPrevious()
+                .setErrorCallback { Log.w(TAG, "Spotify skipPrevious fallback failed", it) }
+            return
+        }
+        appRemote.playerApi.play(previousUri)
+            .setResultCallback { Log.i(TAG, "Requested previous track from local history") }
+            .setErrorCallback { error ->
+                Log.w(TAG, "Could not play previous track URI; falling back to Spotify skipPrevious", error)
+                appRemote.playerApi.skipPrevious()
+                    .setErrorCallback { fallbackError -> Log.w(TAG, "Spotify skipPrevious fallback failed", fallbackError) }
+            }
+    }
+
+    private fun playPreviousTrack(controller: MediaController) {
+        val previousUri = previousTrackUri()
+        if (previousUri == null) {
+            Log.i(TAG, "No previous track URI in local history; using media-session skipToPrevious")
+            controller.transportControls.skipToPrevious()
+            return
+        }
+        runCatching {
+            controller.transportControls.playFromMediaId(previousUri, null)
+            Log.i(TAG, "Requested previous track from local history through media session")
+        }.onFailure { error ->
+            Log.w(TAG, "Could not request previous track URI through media session; using skipToPrevious", error)
+            controller.transportControls.skipToPrevious()
+        }
     }
 
     private fun performMediaControllerAction(action: Int) {
@@ -572,7 +636,7 @@ object SpotifyAppRemoteBridge {
                 0 -> controller.transportControls.pause()
                 1 -> controller.transportControls.play()
                 2 -> controller.transportControls.skipToNext()
-                3 -> controller.transportControls.skipToPrevious()
+                3 -> playPreviousTrack(controller)
                 else -> return
             }
             Log.i(TAG, "Spotify media-session command $action dispatched")
@@ -587,7 +651,7 @@ object SpotifyAppRemoteBridge {
             0 -> appRemote.playerApi.pause()
             1 -> appRemote.playerApi.resume()
             2 -> appRemote.playerApi.skipNext()
-            3 -> appRemote.playerApi.skipPrevious()
+            3 -> playPreviousTrack(appRemote)
             else -> return
         }
         result.setResultCallback {
