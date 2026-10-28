@@ -128,6 +128,38 @@ object SpotifyAppRemoteBridge {
         }
     }
 
+    private fun captureSpotifyDetectionReport(activity: GeometryDashActivity): String {
+        val pm = activity.packageManager
+        val sdkActivity = runCatching { SpotifyAppRemote.isSpotifyInstalled(activity) }
+            .fold({ it.toString() }, { "ERROR ${it.javaClass.name}: ${it.message}" })
+        val sdkApplication = runCatching {
+            SpotifyAppRemote.isSpotifyInstalled(activity.applicationContext)
+        }.fold({ it.toString() }, { "ERROR ${it.javaClass.name}: ${it.message}" })
+        val packageInfo = runCatching {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo("com.spotify.music", 0)
+        }.fold(
+            { info -> "FOUND version=${info.versionName}, versionCode=${info.longVersionCode}, enabled=${info.applicationInfo?.enabled}" },
+            { error -> "NOT FOUND ${error.javaClass.name}: ${error.message}" }
+        )
+        val remoteService = runCatching {
+            val component = ComponentName(
+                "com.spotify.music",
+                "com.spotify.interapp.service.service.AppProtocolRemoteService"
+            )
+            @Suppress("DEPRECATION")
+            val info = pm.getServiceInfo(component, 0)
+            "FOUND exported=${info.exported}, enabled=${info.enabled}, permission=${info.permission ?: "none"}"
+        }.fold(
+            { it },
+            { error -> "NOT FOUND ${error.javaClass.name}: ${error.message}" }
+        )
+        return "SDK detects Spotify (activity context): $sdkActivity\n" +
+            "SDK detects Spotify (application context): $sdkApplication\n" +
+            "PackageManager Spotify package: $packageInfo\n" +
+            "Explicit App Remote service: $remoteService"
+    }
+
     private fun connect(activity: GeometryDashActivity) {
         Log.i(TAG, "Connecting to Spotify App Remote")
         runCatching { SpotifyAppRemote.setDebugMode(true) }
@@ -457,8 +489,12 @@ object SpotifyAppRemoteBridge {
                         appendLine("=== Original Spotify App Remote failure ===")
                         appendLine(lastAppRemoteFailure)
                         appendLine()
+                        appendLine("=== App Remote detection probes ===")
+                        append(captureSpotifyDetectionReport(activity))
+                        appendLine()
                         appendLine("=== Recent Spotify SDK logcat ===")
                         append(captureSpotifyLogs())
+                        appendLine()
                         appendLine("MediaBrowser connected: ${mediaBrowser?.isConnected == true}")
                         appendLine("MediaController available: ${mediaController != null}")
                         appendLine("Pending action: ${pendingAction?.toString() ?: "none"}")
