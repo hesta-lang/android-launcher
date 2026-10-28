@@ -36,6 +36,7 @@ object SpotifyAppRemoteBridge {
     @Volatile private var playing = false
     @Volatile private var songTitle = ""
     @Volatile private var songArtist = ""
+    @Volatile private var lastAppRemoteFailure = "No App Remote failure recorded yet"
 
     @JvmStatic
     fun setActivity(activity: GeometryDashActivity?) {
@@ -166,6 +167,12 @@ object SpotifyAppRemoteBridge {
 
             override fun onFailure(throwable: Throwable) {
                 Log.e(TAG, "Spotify App Remote connection failed", throwable)
+                lastAppRemoteFailure = generateSequence(throwable as Throwable?) { it.cause }
+                    .take(6)
+                    .joinToString("\n") { error ->
+                        "${error.javaClass.name}: ${error.message ?: "(no message)"}"
+                    }
+                Log.e(TAG, "App Remote failure chain: $lastAppRemoteFailure")
 
                 val isMissingSpotifyForSdk = generateSequence(throwable as Throwable?) { it.cause }
                     .any { it.javaClass.name == "com.spotify.android.appremote.api.error.CouldNotFindSpotifyApp" }
@@ -435,6 +442,12 @@ object SpotifyAppRemoteBridge {
                         appendLine("Launcher: ${activity.packageName}")
                         appendLine("Spotify component: com.spotify.music/com.spotify.mediabrowserservice.mediabrowserservice.SpotifyMediaBrowserService")
                         appendLine("Spotify App Remote connected: ${remote?.isConnected == true}")
+                        appendLine()
+                        appendLine("=== Original Spotify App Remote failure ===")
+                        appendLine(lastAppRemoteFailure)
+                        appendLine()
+                        appendLine("=== Recent Spotify SDK logcat ===")
+                        append(captureSpotifyLogs())
                         appendLine("MediaBrowser connected: ${mediaBrowser?.isConnected == true}")
                         appendLine("MediaController available: ${mediaController != null}")
                         appendLine("Pending action: ${pendingAction?.toString() ?: "none"}")
