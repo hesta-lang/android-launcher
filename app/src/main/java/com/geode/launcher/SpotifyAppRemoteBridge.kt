@@ -647,11 +647,14 @@ object SpotifyAppRemoteBridge {
 
     private fun performAction(appRemote: SpotifyAppRemote, action: Int) {
         Log.i(TAG, "Performing Spotify playback action=$action")
+        if (action == 3) {
+            playPreviousTrack(appRemote)
+            return
+        }
         val result: CallResult<*> = when (action) {
             0 -> appRemote.playerApi.pause()
             1 -> appRemote.playerApi.resume()
             2 -> appRemote.playerApi.skipNext()
-            3 -> playPreviousTrack(appRemote)
             else -> return
         }
         result.setResultCallback {
