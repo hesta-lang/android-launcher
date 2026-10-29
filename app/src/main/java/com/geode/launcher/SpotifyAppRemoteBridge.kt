@@ -68,7 +68,7 @@ object SpotifyAppRemoteBridge {
     @JvmStatic
     fun requestControl(action: Int): Boolean {
         Log.i(TAG, "requestControl called with action=$action")
-        if (action !in 0..3) {
+        if (action !in 0..4) {
             Log.w(TAG, "Rejected invalid action=$action")
             return false
         }
@@ -79,7 +79,11 @@ object SpotifyAppRemoteBridge {
         }
         activity.runOnUiThread {
             Log.i(TAG, "Handling action=$action on UI thread")
-            if (OfflineMusicPlayer.isPlaying() || !hasValidatedInternet(activity)) {
+            if (action == 4) {
+                activity.requestLocalMusicFolder()
+                return@runOnUiThread
+            }
+            if (OfflineMusicPlayer.isLocalMode() || OfflineMusicPlayer.isPlaying() || !hasValidatedInternet(activity)) {
                 val handled = when (action) {
                     0 -> OfflineMusicPlayer.pause()
                     1 -> OfflineMusicPlayer.playOrResume(activity)
