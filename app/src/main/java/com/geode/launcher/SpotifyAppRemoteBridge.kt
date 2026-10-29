@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
  */
 object SpotifyAppRemoteBridge {
     private const val TAG = "SpotifyAppRemoteBridge"
-    private const val CLIENT_ID = "003e981a97ba4d96ab3773420d6458fc"
+    private const val CLIENT_ID = "7314a0ab3c734b2caa4b483032cdd91f"
     private const val REDIRECT_URI = "https://com.geode.launcher/callback"
 
     @Volatile private var activityRef: WeakReference<GeometryDashActivity>? = null
