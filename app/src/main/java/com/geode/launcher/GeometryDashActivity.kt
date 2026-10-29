@@ -2,6 +2,10 @@ package com.geode.launcher
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
@@ -69,6 +73,7 @@ fun ratioForPreference(value: String) = when (value) {
 
 class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperListener, GeodeUtils.CapabilityListener {
     private var mGLSurfaceView: Cocos2dxGLSurfaceView? = null
+    private lateinit var localMusicFolderPicker: ActivityResultLauncher<Uri?>
     private var mIsRunning = false
     private var mIsOnPause = false
     private var mHasWindowFocus = false
@@ -85,6 +90,13 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         FMOD.init(this)
 
         super.onCreate(savedInstanceState)
+        localMusicFolderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                runCatching { OfflineMusicPlayer.saveFolder(this, uri) }
+                    .onSuccess { Toast.makeText(this, "Carpeta de música local guardada", Toast.LENGTH_SHORT).show() }
+                    .onFailure { error -> Log.e("OfflineMusicPlayer", "Could not save selected folder", error); Toast.makeText(this, "No se pudo guardar la carpeta", Toast.LENGTH_LONG).show() }
+            }
+        }
         SpotifyAppRemoteBridge.setActivity(this)
         DiscordSocialSdkInit.setEngineActivity(this)
 
@@ -134,6 +146,14 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
             }
         })
         mGLSurfaceView?.manualBackEvents = true
+    }
+
+    fun requestLocalMusicFolder() {
+        if (!::localMusicFolderPicker.isInitialized) {
+            Log.e("OfflineMusicPlayer", "Folder picker is not initialized yet")
+            return
+        }
+        localMusicFolderPicker.launch(OfflineMusicPlayer.selectedFolder(this))
     }
 
     private fun createVersionFile() {
