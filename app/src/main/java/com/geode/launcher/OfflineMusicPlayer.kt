@@ -25,6 +25,11 @@ object OfflineMusicPlayer {
 
     fun isLocalMode(): Boolean = localMode
 
+    @Synchronized fun switchToSpotifyMode() {
+        localMode = false
+        runCatching { player?.pause() }
+    }
+
     fun saveFolder(context: Context, uri: Uri) {
         localMode = true
         context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
