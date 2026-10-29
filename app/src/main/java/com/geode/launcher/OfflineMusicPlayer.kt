@@ -17,12 +17,16 @@ object OfflineMusicPlayer {
     @Volatile private var currentIndex = -1
     @Volatile private var currentContext: Context? = null
     @Volatile private var files: List<Uri> = emptyList()
+    @Volatile private var localMode = false
 
     fun selectedFolder(context: Context): Uri? =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_TREE_URI, null)?.let(Uri::parse)
 
+    fun isLocalMode(): Boolean = localMode
+
     fun saveFolder(context: Context, uri: Uri) {
+        localMode = true
         context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_TREE_URI, uri.toString()).apply()
