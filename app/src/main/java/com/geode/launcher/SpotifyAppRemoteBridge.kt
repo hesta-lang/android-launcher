@@ -80,7 +80,13 @@ object SpotifyAppRemoteBridge {
         activity.runOnUiThread {
             Log.i(TAG, "Handling action=$action on UI thread")
             if (action == 4) {
-                activity.requestLocalMusicFolder()
+                if (OfflineMusicPlayer.isLocalMode()) {
+                    OfflineMusicPlayer.switchToSpotifyMode()
+                    playing = false
+                    Log.i(TAG, "Switched active music source to Spotify")
+                } else {
+                    activity.requestLocalMusicFolder()
+                }
                 return@runOnUiThread
             }
             if (OfflineMusicPlayer.isLocalMode() || OfflineMusicPlayer.isPlaying() || !hasValidatedInternet(activity)) {
