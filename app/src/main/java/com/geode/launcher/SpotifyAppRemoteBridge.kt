@@ -1,6 +1,5 @@
 package com.geode.launcher
 
-import android.app.AlertDialog
 import android.content.ComponentName
 import android.media.MediaMetadata
 import android.media.browse.MediaBrowser
@@ -522,15 +521,6 @@ object SpotifyAppRemoteBridge {
                 val spotifyLogs = captureSpotifyLogs()
                 val diagnostic = "Spotify App Remote connection failed\n\n$platformReport\nSDK detects Spotify (Activity context): $sdkDetectsSpotify\nSDK detects Spotify (Application context): $sdkDetectsSpotifyFromAppContext\nLaunchable: $launchable\n$packageManagerProbe\n$appSigningReport\n$explicitRemoteServiceReport\n\n=== Spotify launcher activity resolution ===\n$launcherResolution\n\n=== Spotify URI intent resolution ===\n$spotifyIntentProbe\n\n=== Spotify declared services ===\n$serviceReport\n\n=== Spotify package candidates ===\n$packageReport\n\n=== Exception chain ===\n$causes\n\n=== SpotifyAppRemote / SpotifyLocator logs ===\n$spotifyLogs"
                 Log.e(TAG, diagnostic, throwable)
-                AlertDialog.Builder(activity)
-                    .setTitle("Diagnóstico de Spotify")
-                    .setMessage(diagnostic)
-                    .setPositiveButton("Copiar y cerrar") { _, _ ->
-                        val clipboard = activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Spotify diagnostic", diagnostic))
-                    }
-                    .setNegativeButton("Cerrar", null)
-                    .show()
                 remote = null
                 pendingAction = null
             }
@@ -614,17 +604,6 @@ object SpotifyAppRemoteBridge {
                     mediaBrowser = null
                     mediaController = null
                     pendingAction = null
-                    activity.runOnUiThread {
-                        AlertDialog.Builder(activity)
-                            .setTitle("Diagnóstico del control Spotify")
-                            .setMessage(diagnostic)
-                            .setPositiveButton("Copiar diagnóstico") { _, _ ->
-                                val clipboard = activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Spotify MediaBrowser diagnostic", diagnostic))
-                            }
-                            .setNegativeButton("Cerrar", null)
-                            .show()
-                    }
                 }
 
                 override fun onConnectionSuspended() {
