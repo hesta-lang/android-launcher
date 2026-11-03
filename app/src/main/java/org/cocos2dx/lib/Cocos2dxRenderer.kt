@@ -1,10 +1,9 @@
 package org.cocos2dx.lib
 
+import android.opengl.EGL14
 import android.opengl.GLSurfaceView
 import android.os.Build
 import android.util.Log
-import javax.microedition.khronos.egl.EGL11
-import javax.microedition.khronos.egl.EGLContext
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -106,13 +105,12 @@ class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceVi
         // effectively tying the game's render rate to the panel refresh rate.
         // Disable that wait on the GL thread after the EGL context/surface is current.
         runCatching {
-            val egl = EGLContext.getEGL() as EGL11
-            val display = egl.eglGetCurrentDisplay()
-            val success = egl.eglSwapInterval(display, 0)
+            val display = EGL14.eglGetCurrentDisplay()
+            val success = EGL14.eglSwapInterval(display, 0)
             if (success) {
                 Log.i("GeodeFPS", "EGL VSync disabled (swap interval 0); render loop is uncapped")
             } else {
-                Log.w("GeodeFPS", "Could not disable EGL VSync; EGL error=0x${Integer.toHexString(egl.eglGetError())}")
+                Log.w("GeodeFPS", "Could not disable EGL VSync; EGL error=0x${Integer.toHexString(EGL14.eglGetError())}")
             }
         }.onFailure {
             Log.w("GeodeFPS", "Failed to configure uncapped EGL rendering", it)
