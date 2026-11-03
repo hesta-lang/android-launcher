@@ -2,6 +2,9 @@ package org.cocos2dx.lib
 
 import android.opengl.GLSurfaceView
 import android.os.Build
+import android.util.Log
+import javax.microedition.khronos.egl.EGL10
+import javax.microedition.khronos.egl.EGLContext
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -98,6 +101,23 @@ class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceVi
     }
 
     override fun onSurfaceCreated(gl10: GL10?, eglConfig: EGLConfig?) {
+        // Geometry Dash renders through a continuous GLSurfaceView loop. The default
+        // EGL swap interval can block every buffer swap until the next display VSync,
+        // effectively tying the game's render rate to the panel refresh rate.
+        // Disable that wait on the GL thread after the EGL context/surface is current.
+        runCatching {
+            val egl = EGLContext.getEGL() as EGL10
+            val display = egl.eglGetCurrentDisplay()
+            val success = egl.eglSwapInterval(display, 0)
+            if (success) {
+                Log.i("GeodeFPS", "EGL VSync disabled (swap interval 0); render loop is uncapped")
+            } else {
+                Log.w("GeodeFPS", "Could not disable EGL VSync; EGL error=0x${Integer.toHexString(egl.eglGetError())}")
+            }
+        }.onFailure {
+            Log.w("GeodeFPS", "Failed to configure uncapped EGL rendering", it)
+        }
+
         nativeInit(screenWidth, screenHeight)
         lastTickInNanoSeconds = System.nanoTime()
     }
