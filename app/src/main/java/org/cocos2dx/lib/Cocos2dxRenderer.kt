@@ -99,11 +99,10 @@ class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceVi
         screenHeight = surfaceHeight
     }
 
-    override fun onSurfaceCreated(gl10: GL10?, eglConfig: EGLConfig?) {
-        // Geometry Dash renders through a continuous GLSurfaceView loop. The default
-        // EGL swap interval can block every buffer swap until the next display VSync,
-        // effectively tying the game's render rate to the panel refresh rate.
-        // Disable that wait on the GL thread after the EGL context/surface is current.
+    // Must run on the GL thread while the EGL surface is current.
+    // Reapply after resume because Android/vendor EGL drivers may restore the
+    // default swap interval even when GLSurfaceView preserves its EGL context.
+    private fun applyUncappedEGLSwapInterval() {
         runCatching {
             val display = EGL14.eglGetCurrentDisplay()
             val success = EGL14.eglSwapInterval(display, 0)
@@ -115,7 +114,10 @@ class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceVi
         }.onFailure {
             Log.w("GeodeFPS", "Failed to configure uncapped EGL rendering", it)
         }
+    }
 
+    override fun onSurfaceCreated(gl10: GL10?, eglConfig: EGLConfig?) {
+        applyUncappedEGLSwapInterval()
         nativeInit(screenWidth, screenHeight)
         lastTickInNanoSeconds = System.nanoTime()
     }
@@ -186,6 +188,9 @@ class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceVi
 
     fun handleOnResume() {
         nativeOnResume()
+        // This callback is queued by GLSurfaceView, so the EGL context is current.
+        // Reapply swap interval after returning from Android's background state.
+        applyUncappedEGLSwapInterval()
     }
 
     fun handleInsertText(text: String) {
