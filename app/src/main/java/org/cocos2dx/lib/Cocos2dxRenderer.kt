@@ -5,9 +5,6 @@ import android.os.Build
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
-private const val NANOSECONDS_PER_SECOND = 1000000000L
-private const val NANOSECONDS_PER_MICROSECOND = 1000000L
-
 @Suppress("unused", "KotlinJniMissingFunction")
 open class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceView.Renderer {
     companion object {
@@ -81,15 +78,18 @@ open class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurf
         private external fun nativeInit(width: Int, height: Int)
     }
 
-    private var lastTickInNanoSeconds: Long = 0
     private var screenWidth = 0
     private var screenHeight = 0
     var sendResizeEvents = false
     var setFrameRate = false
-    private var mAnimationInterval: Long? = null
 
-    fun limitFrameRate(rate: Int) {
-        mAnimationInterval = NANOSECONDS_PER_SECOND/rate
+    /**
+     * Kept for source compatibility with launcher integrations.
+     * The launcher intentionally does not impose a software frame-rate limit.
+     */
+    @Deprecated("Software frame-rate limiting is disabled in the launcher")
+    fun limitFrameRate(@Suppress("UNUSED_PARAMETER") rate: Int) {
+        // Deliberately no-op: render as soon as the EGL driver permits.
     }
 
     fun setScreenWidthAndHeight(surfaceWidth: Int, surfaceHeight: Int) {
@@ -99,7 +99,6 @@ open class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurf
 
     override fun onSurfaceCreated(gl10: GL10?, eglConfig: EGLConfig?) {
         nativeInit(screenWidth, screenHeight)
-        lastTickInNanoSeconds = System.nanoTime()
     }
 
     override fun onSurfaceChanged(gl10: GL10?, width: Int, height: Int) {
@@ -111,23 +110,9 @@ open class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurf
     }
 
     override fun onDrawFrame(gl: GL10?) {
-        val animationInterval = mAnimationInterval
-        if (animationInterval == null) {
-            nativeRender()
-        } else {
-            nativeRender()
-
-            val now = System.nanoTime()
-            val interval = now - this.lastTickInNanoSeconds
-
-            if (interval < animationInterval) {
-                try {
-                    Thread.sleep((animationInterval - interval) / NANOSECONDS_PER_MICROSECOND)
-                } catch (e: Exception) {}
-            }
-
-            lastTickInNanoSeconds = System.nanoTime()
-        }
+        // No Thread.sleep or software FPS cap. EGL/surface pacing is configured
+        // by DiagnosticsCocos2dxRenderer on the active render thread.
+        nativeRender()
     }
 
     fun handleActionDown(id: Int, x: Float, y: Float, timestamp: Double) {

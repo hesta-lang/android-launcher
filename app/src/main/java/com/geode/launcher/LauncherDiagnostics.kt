@@ -160,7 +160,8 @@ object LauncherDiagnostics {
         renderer: String?,
         version: String?,
         shadingLanguageVersion: String?,
-        extensions: String?
+        extensions: String?,
+        capabilities: JSONObject? = null
     ) {
         val data = JSONObject()
             .put("gl_vendor", vendor.orEmpty())
@@ -168,6 +169,9 @@ object LauncherDiagnostics {
             .put("gl_version", version.orEmpty())
             .put("glsl_version", shadingLanguageVersion.orEmpty())
             .put("gl_extensions_truncated", extensions.orEmpty().take(4_000))
+        if (capabilities != null) {
+            data.put("gl_capabilities", capabilities)
+        }
         recordEvent("gl_context_created", data)
     }
 
