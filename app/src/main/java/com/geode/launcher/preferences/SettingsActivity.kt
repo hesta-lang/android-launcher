@@ -80,7 +80,6 @@ import com.geode.launcher.preferences.components.OptionsLabel
 import com.geode.launcher.preferences.components.OptionsTitle
 import com.geode.launcher.preferences.components.SafeModeDialog
 import com.geode.launcher.preferences.components.SettingsCard
-import com.geode.launcher.preferences.components.SettingsFPSCard
 import com.geode.launcher.preferences.components.SettingsRangeCard
 import com.geode.launcher.preferences.components.SettingsSelectCard
 import com.geode.launcher.preferences.components.SettingsStringSelectCard
@@ -461,22 +460,6 @@ fun GameplaySettingsGroup() {
                 asCard = false
             )
         }
-
-        val maxFrameRate = remember {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                context.display.supportedModes.maxOf { it.refreshRate }
-            } else {
-                @Suppress("DEPRECATION")
-                (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.refreshRate
-            }.roundToInt()
-        }
-
-        SettingsFPSCard(
-            title = stringResource(R.string.preference_limit_framerate_name),
-            dialogTitle = stringResource(R.string.preference_limit_framerate_select),
-            preferenceKey = PreferenceUtils.Key.LIMIT_FRAME_RATE,
-            maxFrameRate = maxFrameRate
-        )
 
         var showSafeModeDialog by remember { mutableStateOf(false) }
 
