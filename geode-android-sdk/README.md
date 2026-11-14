@@ -103,3 +103,8 @@ For a Bismuth Android port, the remaining mod-side work includes:
 - keeping all GL work on the game's current render thread and preserving Cocos' render state.
 
 GL4ES is intentionally not installed as a global `libGL` replacement: its advertised desktop compatibility target is OpenGL 1.5/2.1 over GLES 1.1/2.0, which does not cover Bismuth's compute/SSBO pipeline.
+
+
+## Launcher EGL context selection
+
+The launcher tries to create an EGL OpenGL ES 3.1 context when `EGL_KHR_create_context` is available. It falls back to an ES 3.x context and then ES 2.0 if creation fails. The selected context is still the single Cocos-owned context; the native graphics query reports the actual GL version and feature support. A successful 3.x context does not guarantee all desktop OpenGL extensions used by Bismuth are available.

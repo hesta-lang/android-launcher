@@ -511,10 +511,12 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         this.mGLSurfaceView = glSurfaceView
         frameLayout.addView(this.mGLSurfaceView)
 
-        glSurfaceView.setEGLContextClientVersion(2)
-        glSurfaceView.setEGLConfigChooser(EGLConfigChooser())
-
+        // Cocos initView() defaults to GLES 2. Replace its default context
+        // factory afterwards, but before setRenderer(), to allow GLES 3.1 on
+        // devices that support compute shaders and shader storage buffers.
         glSurfaceView.initView()
+        glSurfaceView.setEGLContextFactory(EGLContextFactory())
+        glSurfaceView.setEGLConfigChooser(EGLConfigChooser())
 
         val renderer = DiagnosticsCocos2dxRenderer(glSurfaceView)
         mDiagnosticsRenderer = renderer
@@ -772,10 +774,99 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         }
     }
 
+    /**
+     * Tries GLES 3.1 first, then GLES 3.x, then the original GLES 2 path.
+     * The returned context remains the single context owned by Cocos.
+     */
+    class EGLContextFactory : GLSurfaceView.EGLContextFactory {
+        override fun createContext(
+            egl: EGL10,
+            display: EGLDisplay,
+            config: EGLConfig
+        ): javax.microedition.khronos.egl.EGLContext {
+            val extensions = egl.eglQueryString(display, EGL10.EGL_EXTENSIONS).orEmpty()
+            val supportsCreateContext = extensions
+                .split(' ')
+                .any { it == "EGL_KHR_create_context" }
+
+            if (supportsCreateContext) {
+                val context31 = egl.eglCreateContext(
+                    display,
+                    config,
+                    EGL10.EGL_NO_CONTEXT,
+                    intArrayOf(
+                        EGL_CONTEXT_CLIENT_VERSION, 3,
+                        EGL_CONTEXT_MINOR_VERSION_KHR, 1,
+                        EGL10.EGL_NONE
+                    )
+                )
+                if (context31 != EGL10.EGL_NO_CONTEXT) {
+                    Log.i("GeodeLauncher", "Created GLES 3.1 EGL context")
+                    return context31
+                }
+                Log.w(
+                    "GeodeLauncher",
+                    "GLES 3.1 context creation failed (EGL 0x" +
+                        egl.eglGetError().toString(16) + "); trying GLES 3.x"
+                )
+            }
+
+            val context3 = egl.eglCreateContext(
+                display,
+                config,
+                EGL10.EGL_NO_CONTEXT,
+                intArrayOf(EGL_CONTEXT_CLIENT_VERSION, 3, EGL10.EGL_NONE)
+            )
+            if (context3 != EGL10.EGL_NO_CONTEXT) {
+                Log.i("GeodeLauncher", "Created GLES 3.x compatible EGL context")
+                return context3
+            }
+            Log.w(
+                "GeodeLauncher",
+                "GLES 3 context creation failed (EGL 0x" +
+                    egl.eglGetError().toString(16) + "); falling back to GLES 2"
+            )
+
+            val context2 = egl.eglCreateContext(
+                display,
+                config,
+                EGL10.EGL_NO_CONTEXT,
+                intArrayOf(EGL_CONTEXT_CLIENT_VERSION, 2, EGL10.EGL_NONE)
+            )
+            if (context2 != EGL10.EGL_NO_CONTEXT) {
+                Log.i("GeodeLauncher", "Created fallback GLES 2.0 EGL context")
+                return context2
+            }
+
+            throw IllegalStateException(
+                "Could not create GLES 3.1, GLES 3.x or GLES 2.0 context (EGL 0x" +
+                    egl.eglGetError().toString(16) + ")"
+            )
+        }
+
+        override fun destroyContext(
+            egl: EGL10,
+            display: EGLDisplay,
+            context: javax.microedition.khronos.egl.EGLContext
+        ) {
+            if (!egl.eglDestroyContext(display, context)) {
+                Log.w(
+                    "GeodeLauncher",
+                    "eglDestroyContext failed (EGL 0x" +
+                        egl.eglGetError().toString(16) + ")"
+                )
+            }
+        }
+
+        companion object {
+            private const val EGL_CONTEXT_CLIENT_VERSION = 0x3098
+            private const val EGL_CONTEXT_MINOR_VERSION_KHR = 0x30FB
+        }
+    }
+
     class EGLConfigChooser : GLSurfaceView.EGLConfigChooser {
-        // this comes from EGL14, but is unavailable on EGL10
-        // also EGL14 is incompatible with EGL10. so whatever
-        private var EGL_OPENGL_ES2_BIT: Int = 0x04
+        // EGL_OPENGL_ES3_BIT_KHR is 0x40; EGL_OPENGL_ES2_BIT is 0x04.
+        private val renderableTypes = intArrayOf(0x44, 0x40, 0x04)
 
         private data class ConfigValues(
             val redSize: Int,
@@ -786,16 +877,25 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
             val stencilSize: Int,
         )
 
-        private fun getAttribValue(egl: EGL10, display: EGLDisplay, config: EGLConfig, attrib: Int): Int {
+        private fun getAttribValue(
+            egl: EGL10,
+            display: EGLDisplay,
+            config: EGLConfig,
+            attrib: Int
+        ): Int {
             val value = IntArray(1)
             egl.eglGetConfigAttrib(display, config, attrib, value)
-
             return value[0]
         }
 
-        private fun testConfig(egl: EGL10, display: EGLDisplay, attrib: ConfigValues): EGLConfig? {
+        private fun testConfig(
+            egl: EGL10,
+            display: EGLDisplay,
+            attrib: ConfigValues,
+            renderableType: Int
+        ): EGLConfig? {
             val attribList = intArrayOf(
-                EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                EGL10.EGL_RENDERABLE_TYPE, renderableType,
                 EGL10.EGL_RED_SIZE, attrib.redSize,
                 EGL10.EGL_GREEN_SIZE, attrib.greenSize,
                 EGL10.EGL_BLUE_SIZE, attrib.blueSize,
@@ -807,13 +907,8 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
 
             val configs = arrayOfNulls<EGLConfig>(1)
             val numConfigs = IntArray(1)
-
-            val res = egl.eglChooseConfig(display, attribList, configs, configs.size, numConfigs)
-            if (res && numConfigs[0] > 0 && configs[0] != null) {
-                return configs[0]
-            }
-
-            return null
+            val success = egl.eglChooseConfig(display, attribList, configs, configs.size, numConfigs)
+            return if (success && numConfigs[0] > 0) configs[0] else null
         }
 
         private fun printConfig(egl: EGL10, display: EGLDisplay, config: EGLConfig) {
@@ -835,14 +930,21 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
                 ConfigValues(0, 0, 0, 0, 0, 0),
             )
 
-            return configs.firstNotNullOf {
-                val config = testConfig(egl, display, it)
-                if (config != null) {
-                    printConfig(egl, display, config)
+            for (renderableType in renderableTypes) {
+                for (attributes in configs) {
+                    val config = testConfig(egl, display, attributes, renderableType)
+                    if (config != null) {
+                        printConfig(egl, display, config)
+                        Log.i(
+                            "GeodeLauncher",
+                            "Selected EGL renderable type 0x" + renderableType.toString(16)
+                        )
+                        return config
+                    }
                 }
-
-                config
             }
+
+            throw IllegalArgumentException("No compatible EGLConfig found for GLES 3.1/3.x/2.0")
         }
     }
 }
