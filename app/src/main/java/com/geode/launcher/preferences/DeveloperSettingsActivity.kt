@@ -105,6 +105,10 @@ fun onOpenLogs(context: Context) {
     context.startActivity(launchIntent)
 }
 
+fun onOpenLauncherDiagnostics(context: Context) {
+    context.startActivity(Intent(context, LauncherDiagnosticsActivity::class.java))
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeveloperSettingsScreen(onBackPressedDispatcher: OnBackPressedDispatcher?) {
@@ -196,6 +200,18 @@ fun DeveloperSettingsScreen(onBackPressedDispatcher: OnBackPressedDispatcher?) {
                             )
                         },
                         onClick = { onOpenLogs(context) }
+                    )
+
+                    OptionsButton(
+                        title = stringResource(R.string.launcher_diagnostics_entry),
+                        description = stringResource(R.string.launcher_diagnostics_entry_description),
+                        icon = {
+                            Icon(
+                                painterResource(R.drawable.icon_mobile_code),
+                                contentDescription = null
+                            )
+                        },
+                        onClick = { onOpenLauncherDiagnostics(context) }
                     )
 
                     OptionsButton(
