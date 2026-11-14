@@ -511,12 +511,10 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         this.mGLSurfaceView = glSurfaceView
         frameLayout.addView(this.mGLSurfaceView)
 
-        // Cocos initView() defaults to GLES 2. Replace its default context
-        // factory afterwards, but before setRenderer(), to allow GLES 3.1 on
-        // devices that support compute shaders and shader storage buffers.
-        glSurfaceView.initView()
-        glSurfaceView.setEGLContextFactory(EGLContextFactory())
+        // Restore the launcher's original GLES 2 EGL context path for A/B testing.
+        glSurfaceView.setEGLContextClientVersion(2)
         glSurfaceView.setEGLConfigChooser(EGLConfigChooser())
+        glSurfaceView.initView()
 
         val renderer = DiagnosticsCocos2dxRenderer(glSurfaceView)
         mDiagnosticsRenderer = renderer
@@ -865,8 +863,8 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
     }
 
     class EGLConfigChooser : GLSurfaceView.EGLConfigChooser {
-        // EGL_OPENGL_ES3_BIT_KHR is 0x40; EGL_OPENGL_ES2_BIT is 0x04.
-        private val renderableTypes = intArrayOf(0x44, 0x40, 0x04)
+        // Match the original Cocos/Geode launcher: GLES 2 renderable config only.
+        private val renderableTypes = intArrayOf(0x04)
 
         private data class ConfigValues(
             val redSize: Int,
