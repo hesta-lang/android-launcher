@@ -2,6 +2,7 @@ package com.geode.launcher
 
 import androidx.annotation.Keep
 import com.geode.launcher.utils.Constants
+import com.geode.launcher.utils.GeodeUtils
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
@@ -322,17 +323,14 @@ object LauncherDiagnostics {
             null
         }
         val gameVersionCode = try {
-            File(context.filesDir, "game_version.txt").readText().trim().toLongOrNull() ?: -1L
+            GeodeUtils.getGameVersionCode()
         } catch (_: Exception) {
             -1L
         }
-        val gameVersion = when (gameVersionCode) {
-            37L -> "2.200"
-            38L -> "2.205"
-            39L -> "2.206"
-            40L -> "2.2074"
-            41L -> "2.2081"
-            else -> "unknown"
+        val gameVersion = try {
+            GeodeUtils.getGameVersion().ifBlank { "unknown" }
+        } catch (_: Exception) {
+            "unknown"
         }
 
         return JSONObject()
