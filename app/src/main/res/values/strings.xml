@@ -298,6 +298,18 @@
     <string name="preference_profiles_delete_alt">Delete</string>
     <string name="preference_profiles_delete_undo_alt">Undo</string>
 
+    <!-- Launcher diagnostics -->
+    <string name="title_activity_launcher_diagnostics">Launcher Diagnostics</string>
+    <string name="launcher_diagnostics_entry">Launcher Diagnostics</string>
+    <string name="launcher_diagnostics_entry_description">System, process and renderer recordings</string>
+    <string name="launcher_diagnostics_auto_record">Automatic session recording</string>
+    <string name="launcher_diagnostics_auto_record_description">Record device, process and Cocos timing whenever Geometry Dash starts.</string>
+    <string name="launcher_diagnostics_scope_note">Renderer timings include all Cocos scenes. Level-only segments appear when a compatible Geode integration sends level start and end markers. GPU execution time is not measured.</string>
+    <string name="launcher_diagnostics_sessions">Recorded sessions</string>
+    <string name="launcher_diagnostics_no_sessions">No diagnostic sessions yet. Launch Geometry Dash to create the first recording.</string>
+    <string name="launcher_diagnostics_export">Export</string>
+    <string name="launcher_diagnostics_exported">Diagnostic session exported.</string>
+
     <!-- ApplicationLogsActivity strings -->
     <string name="title_activity_application_logs">Application logs</string>
     <string name="application_logs_no_logs">No logs available.</string>
