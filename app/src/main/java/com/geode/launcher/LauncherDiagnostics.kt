@@ -241,6 +241,23 @@ object LauncherDiagnostics {
         recordEvent("level_ended", event)
     }
 
+    /**
+     * Receives the bounded, per-level object-capture summary from DashCore.
+     * The launcher owns the session file; DashCore only supplies structured data.
+     */
+    @Keep
+    @JvmStatic
+    fun onDashCoreLevelDiagnostics(payload: String?) {
+        if (!active || payload.isNullOrBlank()) return
+        try {
+            recordEvent("dashcore_level_capture_diagnostics", JSONObject(payload))
+        } catch (error: Exception) {
+            recordEvent("dashcore_level_capture_diagnostics_parse_failed", JSONObject()
+                .put("error", error.message ?: error.javaClass.simpleName)
+                .put("payload_prefix", payload.take(256)))
+        }
+    }
+
     @Synchronized
     fun endSession(reason: String) {
         if (!active) return
