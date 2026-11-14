@@ -44,6 +44,12 @@ class DiagnosticsCocos2dxRenderer(
     }
 
     override fun onDrawFrame(gl: GL10?) {
+        if (!LauncherDiagnostics.isRecording()) {
+            previousFrameStartNs = 0L
+            super.onDrawFrame(gl)
+            return
+        }
+
         val frameStartNs = SystemClock.elapsedRealtimeNanos()
         val intervalNs = if (previousFrameStartNs == 0L) 0L else frameStartNs - previousFrameStartNs
         previousFrameStartNs = frameStartNs
