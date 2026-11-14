@@ -1,5 +1,6 @@
 package com.geode.launcher
 
+import androidx.annotation.Keep
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
@@ -21,6 +22,7 @@ import kotlin.math.ceil
  * Session recorder owned by the launcher. Frame callbacks only update fixed-size
  * in-memory windows; disk I/O and process sampling happen on a dedicated worker.
  */
+@Keep
 object LauncherDiagnostics {
     private const val TAG = "LauncherDiagnostics"
     private const val PREFS = "launcher_diagnostics"
@@ -33,6 +35,8 @@ object LauncherDiagnostics {
     @Volatile private var currentLevelActive = false
     @Volatile private var currentLevelId: String? = null
     @Volatile private var currentLevelName: String? = null
+    @Volatile private var currentLevelSegmentIndex = 0L
+    @Volatile private var currentLevelStartedElapsedMs = 0L
 
     private var worker: HandlerThread? = null
     @Volatile private var handler: Handler? = null
@@ -49,6 +53,8 @@ object LauncherDiagnostics {
     private val levelFrames = FrameWindow()
     private val totalGameFrames = AtomicLong(0)
     private val totalLevelFrames = AtomicLong(0)
+
+    fun isRecording(): Boolean = active
 
     fun isEnabled(context: Context): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -85,6 +91,8 @@ object LauncherDiagnostics {
         currentLevelActive = false
         currentLevelId = null
         currentLevelName = null
+        currentLevelSegmentIndex = 0L
+        currentLevelStartedElapsedMs = 0L
         gameFrames.clear()
         levelFrames.clear()
         totalGameFrames.set(0)
@@ -176,24 +184,32 @@ object LauncherDiagnostics {
      * JNI bridge for a compatible Geode integration. The launcher remains the
      * recorder; a game-side integration only supplies the level lifecycle marker.
      */
+    @Keep
     @JvmStatic
     fun onLevelStarted(levelId: String?, levelName: String?) {
+        currentLevelSegmentIndex += 1L
         currentLevelId = levelId?.take(128)
         currentLevelName = levelName?.take(180)
+        currentLevelStartedElapsedMs = SystemClock.elapsedRealtime()
         currentLevelActive = true
         recordEvent("level_started", JSONObject()
+            .put("level_segment_index", currentLevelSegmentIndex)
             .put("level_id", currentLevelId ?: JSONObject.NULL)
             .put("level_name", currentLevelName ?: JSONObject.NULL))
     }
 
+    @Keep
     @JvmStatic
     fun onLevelEnded() {
+        val now = SystemClock.elapsedRealtime()
         currentLevelActive = false
         recordEvent("level_ended", JSONObject()
+            .put("level_segment_index", currentLevelSegmentIndex)
             .put("level_id", currentLevelId ?: JSONObject.NULL)
-            .put("level_name", currentLevelName ?: JSONObject.NULL))
-        currentLevelId = null
-        currentLevelName = null
+            .put("level_name", currentLevelName ?: JSONObject.NULL)
+            .put("level_duration_ms", (now - currentLevelStartedElapsedMs).coerceAtLeast(0L)))
+        currentLevelStartedElapsedMs = 0L
+        // Keep the last identity until its final partial frame window is written.
     }
 
     @Synchronized
@@ -353,6 +369,7 @@ object LauncherDiagnostics {
             .put("game_renderer", all)
             .put("level_renderer", level)
             .put("level_marker_active_at_flush", currentLevelActive)
+            .put("level_segment_index", currentLevelSegmentIndex)
             .put("level_id", currentLevelId ?: JSONObject.NULL)
             .put("level_name", currentLevelName ?: JSONObject.NULL)
 
