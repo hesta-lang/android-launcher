@@ -74,7 +74,7 @@ object LauncherDiagnostics {
 
     @Synchronized
     fun startSession(context: Context, displayRefreshRateHz: Float, configuredFrameRateHz: Float? = null) {
-        if (active || !isEnabled(context)) return
+        if (active || worker != null || !isEnabled(context)) return
 
         val directory = File(context.filesDir, "diagnostics/sessions")
         if (!directory.exists() && !directory.mkdirs()) {
@@ -277,6 +277,7 @@ object LauncherDiagnostics {
 
         val localHandler = handler
         val localWorker = worker
+        val closingFile = sessionFile
         sampleTask?.let { localHandler?.removeCallbacks(it) }
         sampleTask = null
 
@@ -285,6 +286,7 @@ object LauncherDiagnostics {
             writer = null
             localWorker?.quitSafely()
             worker = null
+            sessionFile = null
             return
         }
 
@@ -307,6 +309,7 @@ object LauncherDiagnostics {
                 synchronized(this) {
                     if (handler === localHandler) handler = null
                     if (worker === localWorker) worker = null
+                    if (sessionFile == closingFile) sessionFile = null
                 }
             }
         }
