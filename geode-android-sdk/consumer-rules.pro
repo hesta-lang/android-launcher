@@ -1,0 +1,1 @@
+-keep class com.geode.android.sdk.GeodeAndroidSDK { *; }
