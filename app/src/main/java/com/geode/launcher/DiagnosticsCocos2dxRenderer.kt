@@ -15,7 +15,11 @@ import javax.microedition.khronos.opengles.GL10
 class DiagnosticsCocos2dxRenderer(
     surface: Cocos2dxGLSurfaceView
 ) : Cocos2dxRenderer(surface) {
-    private var previousFrameStartNs = 0L
+    @Volatile private var previousFrameStartNs = 0L
+
+    fun resetFrameClock() {
+        previousFrameStartNs = 0L
+    }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         super.onSurfaceCreated(gl, config)
