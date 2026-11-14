@@ -87,6 +87,21 @@ jobs:
     - name: Fix gradle permissions
       run: chmod +x ./gradlew
 
+    - name: Build shared Geode Android SDK AAR
+      if: ${{ matrix.config.flavor == 'standard' && matrix.config.lower == 'release' }}
+      run: ./gradlew :geode-android-sdk:assembleRelease
+
+    - name: Upload shared Geode Android SDK
+      if: ${{ matrix.config.flavor == 'standard' && matrix.config.lower == 'release' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: geode-android-sdk-alpha
+        path: |
+          geode-android-sdk/build/outputs/aar/geode-android-sdk-release.aar
+          geode-android-sdk/src/main/cpp/include/geode_android_sdk.h
+          geode-android-sdk/README.md
+        if-no-files-found: error
+
     - name: Build project (standard)
       if: ${{ matrix.config.flavor == 'standard' }}
       run: |
