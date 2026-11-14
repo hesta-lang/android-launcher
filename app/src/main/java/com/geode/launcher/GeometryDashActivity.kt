@@ -184,6 +184,11 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
 
         loadInternalMods()
 
+        // Begin a launcher-owned diagnostic session before the Cocos surface starts drawing.
+        @Suppress("DEPRECATION")
+        val displayRefreshRate = windowManager.defaultDisplay.refreshRate
+        LauncherDiagnostics.startSession(this, displayRefreshRate)
+
         val baseView = createView()
         if (gameVersionCode >= 42L) {
             mGLSurfaceView?.sendNewCocosEvents = true
@@ -500,7 +505,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
 
         glSurfaceView.initView()
 
-        val renderer = Cocos2dxRenderer(glSurfaceView)
+        val renderer = DiagnosticsCocos2dxRenderer(glSurfaceView)
         glSurfaceView.setCocos2dxRenderer(renderer)
 
         renderer.setFrameRate = mForceRefreshRate
@@ -572,6 +577,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
         super.onWindowFocusChanged(hasWindowFocus)
         mHasWindowFocus = hasWindowFocus
+        LauncherDiagnostics.recordEvent("window_focus_changed", org.json.JSONObject().put("focused", hasWindowFocus))
         if (hasWindowFocus && !mIsOnPause) {
             resumeGame()
         }
@@ -580,6 +586,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
     }
 
     override fun onDestroy() {
+        LauncherDiagnostics.endSession("activity_destroyed")
         super.onDestroy()
         FMOD.close()
     }
@@ -598,6 +605,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
 
     override fun onResume() {
         super.onResume()
+        LauncherDiagnostics.recordEvent("activity_resumed")
         mIsOnPause = false
         BaseRobTopActivity.isPaused = false
         if (mHasWindowFocus && !this.mIsRunning) {
@@ -607,6 +615,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
 
     override fun onRestart() {
         super.onRestart()
+        LauncherDiagnostics.recordEvent("activity_restarted")
         mIsOnPause = false
         BaseRobTopActivity.isPaused = false
         if (!this.mIsRunning) {
@@ -616,6 +625,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
 
     override fun onPause() {
         super.onPause()
+        LauncherDiagnostics.recordEvent("activity_paused")
         mIsOnPause = true
         BaseRobTopActivity.isPaused = true
         if (mIsRunning) {
