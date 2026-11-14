@@ -49,8 +49,9 @@ object LauncherDiagnostics {
     private var lastSampleCpuMs = 0L
     private var sessionStartElapsedMs = 0L
 
+    private val frameLock = Any()
     private val gameFrames = FrameWindow()
-    private val levelFrames = FrameWindow()
+    private var currentLevelWindow: LevelFrameWindow? = null
     private val totalGameFrames = AtomicLong(0)
     private val totalLevelFrames = AtomicLong(0)
 
@@ -88,15 +89,17 @@ object LauncherDiagnostics {
         val localHandler = Handler(thread.looper)
         handler = localHandler
         active = true
-        currentLevelActive = false
-        currentLevelId = null
-        currentLevelName = null
-        currentLevelSegmentIndex = 0L
-        currentLevelStartedElapsedMs = 0L
-        gameFrames.clear()
-        levelFrames.clear()
-        totalGameFrames.set(0)
-        totalLevelFrames.set(0)
+        synchronized(frameLock) {
+            currentLevelActive = false
+            currentLevelId = null
+            currentLevelName = null
+            currentLevelSegmentIndex = 0L
+            currentLevelStartedElapsedMs = 0L
+            currentLevelWindow = null
+            gameFrames.clear()
+            totalGameFrames.set(0)
+            totalLevelFrames.set(0)
+        }
         sessionStartElapsedMs = SystemClock.elapsedRealtime()
         lastSampleWallMs = sessionStartElapsedMs
         lastSampleCpuMs = Process.getElapsedCpuTime()
@@ -171,12 +174,16 @@ object LauncherDiagnostics {
      */
     fun recordFrame(intervalNs: Long, callbackWallNs: Long, callbackCpuNs: Long) {
         if (!active) return
-        gameFrames.record(intervalNs, callbackWallNs, callbackCpuNs, refreshRateHz)
-        totalGameFrames.incrementAndGet()
+        synchronized(frameLock) {
+            if (!active) return
+            gameFrames.record(intervalNs, callbackWallNs, callbackCpuNs, refreshRateHz)
+            totalGameFrames.incrementAndGet()
 
-        if (currentLevelActive) {
-            levelFrames.record(intervalNs, callbackWallNs, callbackCpuNs, refreshRateHz)
-            totalLevelFrames.incrementAndGet()
+            val levelWindow = currentLevelWindow
+            if (currentLevelActive && levelWindow != null) {
+                levelWindow.frames.record(intervalNs, callbackWallNs, callbackCpuNs, refreshRateHz)
+                totalLevelFrames.incrementAndGet()
+            }
         }
     }
 
@@ -187,11 +194,23 @@ object LauncherDiagnostics {
     @Keep
     @JvmStatic
     fun onLevelStarted(levelId: String?, levelName: String?) {
-        currentLevelSegmentIndex += 1L
-        currentLevelId = levelId?.take(128)
-        currentLevelName = levelName?.take(180)
-        currentLevelStartedElapsedMs = SystemClock.elapsedRealtime()
-        currentLevelActive = true
+        if (!active) return
+        val previousWindow = synchronized(frameLock) {
+            val snapshot = buildFrameWindowRecordLocked()
+            currentLevelSegmentIndex += 1L
+            currentLevelId = levelId?.take(128)
+            currentLevelName = levelName?.take(180)
+            currentLevelStartedElapsedMs = SystemClock.elapsedRealtime()
+            currentLevelActive = true
+            currentLevelWindow = LevelFrameWindow(
+                currentLevelSegmentIndex,
+                currentLevelId,
+                currentLevelName,
+                FrameWindow()
+            )
+            snapshot
+        }
+        enqueueFrameWindow(previousWindow)
         recordEvent("level_started", JSONObject()
             .put("level_segment_index", currentLevelSegmentIndex)
             .put("level_id", currentLevelId ?: JSONObject.NULL)
@@ -201,15 +220,25 @@ object LauncherDiagnostics {
     @Keep
     @JvmStatic
     fun onLevelEnded() {
+        if (!active) return
         val now = SystemClock.elapsedRealtime()
-        currentLevelActive = false
-        recordEvent("level_ended", JSONObject()
-            .put("level_segment_index", currentLevelSegmentIndex)
-            .put("level_id", currentLevelId ?: JSONObject.NULL)
-            .put("level_name", currentLevelName ?: JSONObject.NULL)
-            .put("level_duration_ms", (now - currentLevelStartedElapsedMs).coerceAtLeast(0L)))
-        currentLevelStartedElapsedMs = 0L
-        // Keep the last identity until its final partial frame window is written.
+        val snapshot: JSONObject?
+        val event: JSONObject
+        synchronized(frameLock) {
+            snapshot = buildFrameWindowRecordLocked()
+            event = JSONObject()
+                .put("level_segment_index", currentLevelSegmentIndex)
+                .put("level_id", currentLevelId ?: JSONObject.NULL)
+                .put("level_name", currentLevelName ?: JSONObject.NULL)
+                .put("level_duration_ms", (now - currentLevelStartedElapsedMs).coerceAtLeast(0L))
+            currentLevelActive = false
+            currentLevelWindow = null
+            currentLevelStartedElapsedMs = 0L
+            currentLevelId = null
+            currentLevelName = null
+        }
+        enqueueFrameWindow(snapshot)
+        recordEvent("level_ended", event)
     }
 
     @Synchronized
@@ -359,9 +388,27 @@ object LauncherDiagnostics {
     }
 
     private fun flushFrameWindows() {
+        val snapshot = synchronized(frameLock) {
+            buildFrameWindowRecordLocked()
+        }
+        if (snapshot != null) writeLine(snapshot)
+    }
+
+    private fun enqueueFrameWindow(snapshot: JSONObject?) {
+        if (snapshot == null) return
+        handler?.post { writeLine(snapshot) }
+    }
+
+    /**
+     * Must be called while holding frameLock. A level owns its own accumulator,
+     * so a fast level transition cannot combine samples from two PlayLayer instances.
+     */
+    private fun buildFrameWindowRecordLocked(): JSONObject? {
         val all = gameFrames.drain()
-        val level = levelFrames.drain()
-        if (all.optInt("frame_count", 0) == 0 && level.optInt("frame_count", 0) == 0) return
+        val levelWindow = currentLevelWindow
+        val level = levelWindow?.frames?.drain() ?: JSONObject().put("frame_count", 0)
+
+        if (all.optInt("frame_count", 0) == 0 && level.optInt("frame_count", 0) == 0) return null
 
         val data = JSONObject()
             .put("scope", "Cocos2dxRenderer.onDrawFrame")
@@ -369,15 +416,15 @@ object LauncherDiagnostics {
             .put("game_renderer", all)
             .put("level_renderer", level)
             .put("level_marker_active_at_flush", currentLevelActive)
-            .put("level_segment_index", currentLevelSegmentIndex)
-            .put("level_id", currentLevelId ?: JSONObject.NULL)
-            .put("level_name", currentLevelName ?: JSONObject.NULL)
+            .put("level_segment_index", levelWindow?.segmentIndex ?: currentLevelSegmentIndex)
+            .put("level_id", levelWindow?.levelId ?: JSONObject.NULL)
+            .put("level_name", levelWindow?.levelName ?: JSONObject.NULL)
 
-        writeLine(JSONObject()
+        return JSONObject()
             .put("type", "render_window")
             .put("timestamp_unix_ms", System.currentTimeMillis())
             .put("elapsed_realtime_ms", SystemClock.elapsedRealtime())
-            .put("metrics", data))
+            .put("metrics", data)
     }
 
     private fun writeEvent(name: String, attributes: JSONObject) {
@@ -412,6 +459,13 @@ object LauncherDiagnostics {
             }
         }
     }
+
+    private data class LevelFrameWindow(
+        val segmentIndex: Long,
+        val levelId: String?,
+        val levelName: String?,
+        val frames: FrameWindow
+    )
 
     private class FrameWindow {
         companion object {
