@@ -62,6 +62,11 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".preferences.LauncherDiagnosticsActivity"
+            android:exported="false"
+            android:label="@string/title_activity_launcher_diagnostics"
+            android:theme="@style/Theme.GeodeLauncher" />
+        <activity
             android:name=".preferences.ApplicationLogsActivity"
             android:exported="true"
             android:label="@string/title_activity_application_logs"
