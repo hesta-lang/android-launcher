@@ -9,7 +9,7 @@ private const val NANOSECONDS_PER_SECOND = 1000000000L
 private const val NANOSECONDS_PER_MICROSECOND = 1000000L
 
 @Suppress("unused", "KotlinJniMissingFunction")
-class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceView.Renderer {
+open class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceView.Renderer {
     companion object {
         @JvmStatic
         fun setAnimationInterval(@Suppress("UNUSED_PARAMETER") animationInterval: Double) {
