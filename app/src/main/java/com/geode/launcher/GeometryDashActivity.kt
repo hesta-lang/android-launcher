@@ -12,6 +12,7 @@ import android.os.Environment
 import android.text.InputType
 import android.util.Log
 import com.discord.socialsdk.DiscordSocialSdkInit
+import com.geode.android.sdk.GeodeAndroidSDK
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowManager
@@ -76,7 +77,6 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
 
     private var displayMode = DisplayMode.DEFAULT
     private var mForceRefreshRate = false
-    private var mLimitedRefreshRate: Int? = null
     private var mAspectRatio = 0.0f
     private var mScreenZoom = 1.0f
     private var mScreenZoomFit = false
@@ -183,12 +183,22 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
 
         LauncherFix.performPatches()
 
+        val sdkReady = GeodeAndroidSDK.initialize(
+            launcherVersion = BuildConfig.VERSION_NAME,
+            gameVersionCode = gameVersionCode,
+            geodeVersion = "5.11.2",
+            callbacks = LauncherGeodeAndroidSdkHost
+        )
+        if (!sdkReady) {
+            Log.w("GeodeLauncher", "Shared Geode Android SDK is unavailable; continuing without optional SDK callbacks")
+        }
+
         loadInternalMods()
 
         // Begin a launcher-owned diagnostic session before the Cocos surface starts drawing.
         @Suppress("DEPRECATION")
         val displayRefreshRate = windowManager.defaultDisplay.refreshRate
-        LauncherDiagnostics.startSession(this, displayRefreshRate, mLimitedRefreshRate?.toFloat())
+        LauncherDiagnostics.startSession(this, displayRefreshRate)
 
         val baseView = createView()
         if (gameVersionCode >= 42L) {
@@ -512,10 +522,8 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
 
         renderer.setFrameRate = mForceRefreshRate
 
-        val frameRate = mLimitedRefreshRate
-        if (frameRate != null) {
-            renderer.limitFrameRate(frameRate)
-        }
+        // Keep Cocos2dxRenderer's animation interval unset: no software FPS cap.
+        println("createView: uncapped game render loop; stored frame-rate caps are ignored")
 
         editText.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         glSurfaceView.cocos2dxEditText = editText
@@ -539,9 +547,6 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         mAspectRatio = ratioForPreference(preferenceUtils.getString(PreferenceUtils.Key.CUSTOM_ASPECT_RATIO) ?: "16_9")
         mScreenZoom = preferenceUtils.getInt(PreferenceUtils.Key.SCREEN_ZOOM) / 100.0f
         mScreenZoomFit = preferenceUtils.getBoolean(PreferenceUtils.Key.SCREEN_ZOOM_FIT)
-
-        val limitedRefreshRate = preferenceUtils.getInt(PreferenceUtils.Key.LIMIT_FRAME_RATE).takeIf { it != 0 }
-        mLimitedRefreshRate = limitedRefreshRate
 
         mForceRefreshRate = true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
