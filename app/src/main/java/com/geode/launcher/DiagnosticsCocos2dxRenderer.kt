@@ -75,7 +75,7 @@ class DiagnosticsCocos2dxRenderer(
      */
     private fun queryGlesCapabilities(version: String?): JSONObject {
         val result = JSONObject()
-        val versionMatch = Regex("""OpenGL ES\\s+(\\d+)\\.(\\d+)""")
+        val versionMatch = Regex("""OpenGL ES\s+(\d+)\.(\d+)""")
             .find(version.orEmpty())
         val major = versionMatch?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
         val minor = versionMatch?.groupValues?.getOrNull(2)?.toIntOrNull() ?: 0
