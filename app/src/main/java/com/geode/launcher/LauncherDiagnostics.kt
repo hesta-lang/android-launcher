@@ -1,6 +1,7 @@
 package com.geode.launcher
 
 import androidx.annotation.Keep
+import com.geode.launcher.utils.Constants
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
@@ -43,7 +44,6 @@ object LauncherDiagnostics {
     private var sampleTask: Runnable? = null
     private var writer: BufferedWriter? = null
     private var sessionFile: File? = null
-    private var appContext: Context? = null
     private var refreshRateHz = 60.0
     private var frameBudgetHz = 60.0
     private var lastSampleWallMs = 0L
@@ -83,7 +83,6 @@ object LauncherDiagnostics {
         val thread = HandlerThread("LauncherDiagnostics-Writer")
         thread.start()
 
-        appContext = context.applicationContext
         refreshRateHz = displayRefreshRateHz.toDouble().takeIf { it.isFinite() && it > 1.0 } ?: 60.0
         val configuredBudget = configuredFrameRateHz?.toDouble()
             ?.takeIf { it.isFinite() && it > 1.0 }
@@ -322,6 +321,19 @@ object LauncherDiagnostics {
         } catch (_: Exception) {
             null
         }
+        val gameVersionCode = try {
+            File(context.filesDir, "game_version.txt").readText().trim().toLongOrNull() ?: -1L
+        } catch (_: Exception) {
+            -1L
+        }
+        val gameVersion = when (gameVersionCode) {
+            37L -> "2.200"
+            38L -> "2.205"
+            39L -> "2.206"
+            40L -> "2.2074"
+            41L -> "2.2081"
+            else -> "unknown"
+        }
 
         return JSONObject()
             .put("type", "device_info")
@@ -329,6 +341,9 @@ object LauncherDiagnostics {
             .put("launcher_version", packageInfo?.versionName ?: "unknown")
             .put("launcher_version_code", if (Build.VERSION.SDK_INT >= 28) packageInfo?.longVersionCode ?: 0L else packageInfo?.versionCode ?: 0)
             .put("package_name", context.packageName)
+            .put("game_package", Constants.PACKAGE_NAME)
+            .put("game_version_code", gameVersionCode)
+            .put("game_version", gameVersion)
             .put("manufacturer", Build.MANUFACTURER)
             .put("model", Build.MODEL)
             .put("device", Build.DEVICE)
