@@ -69,6 +69,7 @@ fun ratioForPreference(value: String) = when (value) {
 
 class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperListener, GeodeUtils.CapabilityListener {
     private var mGLSurfaceView: Cocos2dxGLSurfaceView? = null
+    private var mDiagnosticsRenderer: DiagnosticsCocos2dxRenderer? = null
     private var mIsRunning = false
     private var mIsOnPause = false
     private var mHasWindowFocus = false
@@ -506,6 +507,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         glSurfaceView.initView()
 
         val renderer = DiagnosticsCocos2dxRenderer(glSurfaceView)
+        mDiagnosticsRenderer = renderer
         glSurfaceView.setCocos2dxRenderer(renderer)
 
         renderer.setFrameRate = mForceRefreshRate
@@ -592,12 +594,14 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
     }
 
     private fun resumeGame() {
+        mDiagnosticsRenderer?.resetFrameClock()
         mIsRunning = true
         Cocos2dxHelper.onResume()
         mGLSurfaceView?.onResume()
     }
 
     private fun pauseGame() {
+        mDiagnosticsRenderer?.resetFrameClock()
         mIsRunning = false
         Cocos2dxHelper.onPause()
         mGLSurfaceView?.onPause()
