@@ -110,8 +110,7 @@ open class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurf
     }
 
     override fun onDrawFrame(gl: GL10?) {
-        // No Thread.sleep or software FPS cap. EGL/surface pacing is configured
-        // by DiagnosticsCocos2dxRenderer on the active render thread.
+        // No Thread.sleep or software FPS cap. The original Cocos native renderer runs unchanged.
         nativeRender()
     }
 
