@@ -1,5 +1,6 @@
 package com.geode.launcher
 
+import android.opengl.GLES20
 import android.os.Debug
 import android.os.SystemClock
 import org.cocos2dx.lib.Cocos2dxGLSurfaceView
@@ -24,7 +25,7 @@ class DiagnosticsCocos2dxRenderer(
                     gl.glGetString(GL10.GL_VENDOR),
                     gl.glGetString(GL10.GL_RENDERER),
                     gl.glGetString(GL10.GL_VERSION),
-                    gl.glGetString(GL10.GL_SHADING_LANGUAGE_VERSION),
+                    gl.glGetString(GLES20.GL_SHADING_LANGUAGE_VERSION),
                     gl.glGetString(GL10.GL_EXTENSIONS)
                 )
             }
