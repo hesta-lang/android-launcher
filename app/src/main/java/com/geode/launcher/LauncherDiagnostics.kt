@@ -228,19 +228,23 @@ object LauncherDiagnostics {
         if (!active) return
         val now = SystemClock.elapsedRealtime()
         val result = synchronized(frameLock) {
-            val snapshot = buildFrameWindowRecordLocked()
-            val event = JSONObject()
-                .put("level_segment_index", currentLevelSegmentIndex)
-                .put("level_id", currentLevelId ?: JSONObject.NULL)
-                .put("level_name", currentLevelName ?: JSONObject.NULL)
-                .put("level_duration_ms", (now - currentLevelStartedElapsedMs).coerceAtLeast(0L))
-            currentLevelActive = false
-            currentLevelWindow = null
-            currentLevelStartedElapsedMs = 0L
-            currentLevelId = null
-            currentLevelName = null
-            snapshot to event
-        }
+            if (!currentLevelActive || currentLevelStartedElapsedMs <= 0L) {
+                null
+            } else {
+                val snapshot = buildFrameWindowRecordLocked()
+                val event = JSONObject()
+                    .put("level_segment_index", currentLevelSegmentIndex)
+                    .put("level_id", currentLevelId ?: JSONObject.NULL)
+                    .put("level_name", currentLevelName ?: JSONObject.NULL)
+                    .put("level_duration_ms", (now - currentLevelStartedElapsedMs).coerceAtLeast(0L))
+                currentLevelActive = false
+                currentLevelWindow = null
+                currentLevelStartedElapsedMs = 0L
+                currentLevelId = null
+                currentLevelName = null
+                snapshot to event
+            }
+        } ?: return
         enqueueFrameWindow(result.first)
         recordEvent("level_ended", result.second)
     }
