@@ -1,5 +1,6 @@
 package com.geode.launcher
 
+import androidx.annotation.Keep
 import android.opengl.EGL14
 import android.opengl.GLES20
 import android.opengl.GLES30
@@ -17,10 +18,18 @@ import javax.microedition.khronos.opengles.GL10
  * Delegates every renderer callback to the original Cocos renderer.
  * Measurements describe CPU-side callback work and callback cadence only.
  */
+@Keep
 class DiagnosticsCocos2dxRenderer(
     surface: Cocos2dxGLSurfaceView
 ) : Cocos2dxRenderer(surface) {
     @Volatile private var previousFrameStartNs = 0L
+    @Volatile private var gpuTimerAvailable = false
+
+    // JNI timer-query bridge. All calls are made on the GLSurfaceView render thread.
+    private external fun nativeInitGpuTimer(): Boolean
+    private external fun nativeBeginGpuTimer(): Boolean
+    private external fun nativeEndGpuTimer()
+    private external fun nativePollGpuTimer(): Long
 
     fun resetFrameClock() {
         previousFrameStartNs = 0L
@@ -148,6 +157,22 @@ class DiagnosticsCocos2dxRenderer(
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         super.onSurfaceCreated(gl, config)
         requestUncappedSwapInterval("surface_created")
+        gpuTimerAvailable = try {
+            nativeInitGpuTimer()
+        } catch (error: UnsatisfiedLinkError) {
+            Log.w("GeodeLauncher", "GPU timer-query bridge is unavailable", error)
+            false
+        } catch (error: Exception) {
+            Log.w("GeodeLauncher", "Could not initialize GPU timer queries", error)
+            false
+        }
+        LauncherDiagnostics.recordEvent(
+            "gpu_timer_initialized",
+            JSONObject()
+                .put("supported", gpuTimerAvailable)
+                .put("method", "GL_EXT_disjoint_timer_query")
+                .put("measurement", "asynchronous_gpu_command_execution")
+        )
         try {
             if (gl != null) {
                 val version = gl.glGetString(GL10.GL_VERSION)
@@ -186,11 +211,57 @@ class DiagnosticsCocos2dxRenderer(
         val intervalNs = if (previousFrameStartNs == 0L) 0L else frameStartNs - previousFrameStartNs
         previousFrameStartNs = frameStartNs
 
+        // Poll an older query before starting this frame's query. The native bridge
+        // never waits for the GPU and drops disjoint measurements instead of blocking.
+        if (gpuTimerAvailable) {
+            try {
+                val completedGpuNs = nativePollGpuTimer()
+                when {
+                    completedGpuNs >= 0L ->
+                        LauncherDiagnostics.recordGpuFrame(completedGpuNs, false)
+                    completedGpuNs == -2L ->
+                        LauncherDiagnostics.recordGpuFrame(0L, true)
+                }
+            } catch (error: Exception) {
+                gpuTimerAvailable = false
+                LauncherDiagnostics.recordEvent(
+                    "gpu_timer_runtime_error",
+                    JSONObject().put("message", error.message ?: error.javaClass.simpleName)
+                )
+                Log.w("GeodeLauncher", "Disabling GPU timer queries after a runtime error", error)
+            }
+        }
+
+        val gpuQueryStarted = if (gpuTimerAvailable) {
+            try {
+                nativeBeginGpuTimer()
+            } catch (error: Exception) {
+                gpuTimerAvailable = false
+                LauncherDiagnostics.recordEvent(
+                    "gpu_timer_runtime_error",
+                    JSONObject().put("message", error.message ?: error.javaClass.simpleName)
+                )
+                false
+            }
+        } else false
+
         val callbackStartNs = System.nanoTime()
         val cpuStartNs = Debug.threadCpuTimeNanos()
         try {
             super.onDrawFrame(gl)
         } finally {
+            if (gpuQueryStarted) {
+                try {
+                    nativeEndGpuTimer()
+                } catch (error: Exception) {
+                    gpuTimerAvailable = false
+                    LauncherDiagnostics.recordEvent(
+                        "gpu_timer_runtime_error",
+                        JSONObject().put("message", error.message ?: error.javaClass.simpleName)
+                    )
+                    Log.w("GeodeLauncher", "Could not close GPU timer query", error)
+                }
+            }
             val callbackWallNs = System.nanoTime() - callbackStartNs
             val cpuEndNs = Debug.threadCpuTimeNanos()
             val callbackCpuNs = if (cpuStartNs >= 0L && cpuEndNs >= cpuStartNs) {

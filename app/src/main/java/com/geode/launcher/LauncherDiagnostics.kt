@@ -60,6 +60,8 @@ object LauncherDiagnostics {
     private var currentLevelWindow: LevelFrameWindow? = null
     private val totalGameFrames = AtomicLong(0)
     private val totalLevelFrames = AtomicLong(0)
+    private val totalGpuSamples = AtomicLong(0)
+    private val totalGpuDisjointSamples = AtomicLong(0)
 
     fun isRecording(): Boolean = active
 
@@ -107,6 +109,8 @@ object LauncherDiagnostics {
             gameFrames.clear()
             totalGameFrames.set(0)
             totalLevelFrames.set(0)
+            totalGpuSamples.set(0)
+            totalGpuDisjointSamples.set(0)
         }
         sessionStartElapsedMs = SystemClock.elapsedRealtime()
         lastSampleWallMs = sessionStartElapsedMs
@@ -196,6 +200,34 @@ object LauncherDiagnostics {
             if (currentLevelActive && levelWindow != null) {
                 levelWindow.frames.record(intervalNs, callbackWallNs, callbackCpuNs, frameBudgetHz)
                 totalLevelFrames.incrementAndGet()
+            }
+        }
+    }
+
+    /**
+     * Records an asynchronously completed GPU timer query. GPU time measures the
+     * execution time of commands submitted by this renderer callback; it is not
+     * display presentation time or a percentage of total GPU utilization.
+     */
+    fun recordGpuFrame(gpuTimeNs: Long, disjoint: Boolean) {
+        if (!active) return
+        synchronized(frameLock) {
+            if (!active) return
+            if (disjoint) {
+                gameFrames.recordGpuDisjoint()
+                totalGpuDisjointSamples.incrementAndGet()
+            } else {
+                gameFrames.recordGpuTime(gpuTimeNs)
+                totalGpuSamples.incrementAndGet()
+            }
+
+            val levelWindow = currentLevelWindow
+            if (currentLevelActive && levelWindow != null) {
+                if (disjoint) {
+                    levelWindow.frames.recordGpuDisjoint()
+                } else {
+                    levelWindow.frames.recordGpuTime(gpuTimeNs)
+                }
             }
         }
     }
@@ -302,6 +334,8 @@ object LauncherDiagnostics {
                     .put("duration_ms", (SystemClock.elapsedRealtime() - sessionStartElapsedMs).coerceAtLeast(0))
                     .put("game_frame_count_total", totalGameFrames.get())
                     .put("level_frame_count_total", totalLevelFrames.get())
+                    .put("gpu_sample_count_total", totalGpuSamples.get())
+                    .put("gpu_disjoint_sample_count_total", totalGpuDisjointSamples.get())
                     .put("level_marker_active", currentLevelActive))
                 writer?.flush()
                 writer?.close()
@@ -567,6 +601,10 @@ object LauncherDiagnostics {
         private val intervals = LongArray(CAPACITY)
         private val callbackWall = LongArray(CAPACITY)
         private val callbackCpu = LongArray(CAPACITY)
+        private val gpuTime = LongArray(CAPACITY)
+        private var gpuCursor = 0
+        private var gpuStored = 0
+        private var gpuDisjoint = 0L
         private var cursor = 0
         private var stored = 0
         private var frames = 0L
@@ -588,9 +626,28 @@ object LauncherDiagnostics {
         }
 
         @Synchronized
+        fun recordGpuTime(gpuTimeNs: Long) {
+            if (gpuStored == CAPACITY) {
+                gpuCursor = (gpuCursor + 1) % CAPACITY
+            } else {
+                gpuStored++
+            }
+            gpuTime[gpuCursor] = gpuTimeNs.coerceAtLeast(0L)
+            gpuCursor = (gpuCursor + 1) % CAPACITY
+        }
+
+        @Synchronized
+        fun recordGpuDisjoint() {
+            gpuDisjoint++
+        }
+
+        @Synchronized
         fun clear() {
             cursor = 0
             stored = 0
+            gpuCursor = 0
+            gpuStored = 0
+            gpuDisjoint = 0L
             frames = 0
             overBudget = 0
             overflowed = 0
@@ -601,6 +658,7 @@ object LauncherDiagnostics {
             val intervalValues = intervals.copyOf(stored).filter { it > 0L }.toLongArray()
             val wallValues = callbackWall.copyOf(stored).filter { it > 0L }.toLongArray()
             val cpuValues = callbackCpu.copyOf(stored).filter { it > 0L }.toLongArray()
+            val gpuValues = gpuTime.copyOf(gpuStored).filter { it >= 0L }.toLongArray()
 
             val result = JSONObject()
                 .put("frame_count", frames)
@@ -610,6 +668,9 @@ object LauncherDiagnostics {
                 .put("frame_interval_ms", stats(intervalValues))
                 .put("renderer_callback_wall_ms", stats(wallValues))
                 .put("renderer_callback_thread_cpu_ms", stats(cpuValues))
+                .put("gpu_execution_ms", stats(gpuValues))
+                .put("gpu_sample_count", gpuValues.size)
+                .put("gpu_disjoint_samples", gpuDisjoint)
 
             clear()
             return result
