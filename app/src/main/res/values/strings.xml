@@ -309,6 +309,9 @@
     <string name="launcher_diagnostics_no_sessions">No diagnostic sessions yet. Launch Geometry Dash to create the first recording.</string>
     <string name="launcher_diagnostics_export">Export</string>
     <string name="launcher_diagnostics_exported">Diagnostic session exported.</string>
+    <string name="launcher_diagnostics_export_all">Export all sessions</string>
+    <string name="launcher_diagnostics_export_all_empty">No completed diagnostic sessions are available to export.</string>
+    <string name="launcher_diagnostics_exported_all">All diagnostic sessions exported.</string>
 
     <!-- ApplicationLogsActivity strings -->
     <string name="title_activity_application_logs">Application logs</string>
