@@ -15,8 +15,12 @@ import android.os.SystemClock
 import android.util.Log
 import org.json.JSONObject
 import java.io.BufferedWriter
+import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.io.FileWriter
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.ceil
 
@@ -313,6 +317,45 @@ object LauncherDiagnostics {
         return directory.listFiles { file ->
             file.isFile && file.name.endsWith(".jsonl")
         }?.sortedByDescending { it.lastModified() } ?: emptyList()
+    }
+
+    /**
+     * Builds one ZIP containing the retained JSONL sessions. The active file is
+     * excluded so the archive cannot contain a partially-written recording.
+     */
+    fun createSessionsArchive(context: Context): File? {
+        val activeFile = if (active) sessionFile else null
+        val sessions = listSessions(context).filter { it != activeFile && it.length() > 0L }
+        if (sessions.isEmpty()) return null
+
+        val directory = File(context.cacheDir, "diagnostics-exports")
+        if (!directory.exists() && !directory.mkdirs()) return null
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+            .format(java.util.Date())
+        val archive = File(directory, "launcher-diagnostics-$stamp.zip")
+        var exported = 0
+
+        return try {
+            ZipOutputStream(BufferedOutputStream(FileOutputStream(archive))).use { zip ->
+                sessions.forEach { source ->
+                    if (!source.isFile) return@forEach
+                    zip.putNextEntry(ZipEntry(source.name))
+                    source.inputStream().use { input -> input.copyTo(zip) }
+                    zip.closeEntry()
+                    exported++
+                }
+            }
+            if (exported > 0 && archive.isFile && archive.length() > 0L) {
+                archive
+            } else {
+                archive.delete()
+                null
+            }
+        } catch (error: Exception) {
+            Log.e(TAG, "Could not create diagnostic sessions archive", error)
+            archive.delete()
+            null
+        }
     }
 
     private fun deviceHeader(context: Context): JSONObject {
