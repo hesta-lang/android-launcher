@@ -120,6 +120,32 @@ fun LauncherDiagnosticsScreen(onBackPressedDispatcher: OnBackPressedDispatcher?)
         pendingExport = null
     }
 
+    var pendingArchive by remember { mutableStateOf<File?>(null) }
+    val archiveLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        val source = pendingArchive
+        if (uri != null && source != null && source.isFile) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    source.inputStream().use { input -> input.copyTo(output) }
+                }
+                Toast.makeText(
+                    context,
+                    R.string.launcher_diagnostics_exported_all,
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (error: Exception) {
+                Toast.makeText(
+                    context,
+                    error.message ?: "Archive export failed",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+        pendingArchive = null
+    }
+
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -182,10 +208,31 @@ fun LauncherDiagnosticsScreen(onBackPressedDispatcher: OnBackPressedDispatcher?)
                 }
             }
 
-            Text(
-                stringResource(R.string.launcher_diagnostics_sessions),
-                style = MaterialTheme.typography.titleMedium
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.launcher_diagnostics_sessions),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                TextButton(
+                    enabled = sessions.isNotEmpty(),
+                    onClick = {
+                        val archive = LauncherDiagnostics.createSessionsArchive(context)
+                        if (archive == null) {
+                            Toast.makeText(
+                                context,
+                                R.string.launcher_diagnostics_export_all_empty,
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            pendingArchive = archive
+                            archiveLauncher.launch(archive.name)
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.launcher_diagnostics_export_all))
+                }
+            }
 
             if (sessions.isEmpty()) {
                 Text(
