@@ -16,7 +16,8 @@ import javax.microedition.khronos.opengles.GL10
 
 /**
  * Delegates every renderer callback to the original Cocos renderer.
- * Measurements describe CPU-side callback work and callback cadence only.
+ * Records CPU callback timing and asynchronous GPU execution-time queries.
+ * Neither metric is a measurement of physical display presentation.
  */
 @Keep
 class DiagnosticsCocos2dxRenderer(
