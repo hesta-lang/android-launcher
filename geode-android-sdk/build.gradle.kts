@@ -5,6 +5,7 @@ plugins {
 android {
     namespace = "com.geode.android.sdk"
     compileSdk = 37
+    ndkVersion = "30.0.16248370"
 
     defaultConfig {
         minSdk = 23
