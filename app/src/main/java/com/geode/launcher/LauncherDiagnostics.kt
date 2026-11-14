@@ -45,6 +45,7 @@ object LauncherDiagnostics {
     private var sessionFile: File? = null
     private var appContext: Context? = null
     private var refreshRateHz = 60.0
+    private var frameBudgetHz = 60.0
     private var lastSampleWallMs = 0L
     private var lastSampleCpuMs = 0L
     private var sessionStartElapsedMs = 0L
@@ -67,7 +68,7 @@ object LauncherDiagnostics {
     }
 
     @Synchronized
-    fun startSession(context: Context, displayRefreshRateHz: Float) {
+    fun startSession(context: Context, displayRefreshRateHz: Float, configuredFrameRateHz: Float? = null) {
         if (active || !isEnabled(context)) return
 
         val directory = File(context.filesDir, "diagnostics/sessions")
@@ -84,6 +85,9 @@ object LauncherDiagnostics {
 
         appContext = context.applicationContext
         refreshRateHz = displayRefreshRateHz.toDouble().takeIf { it.isFinite() && it > 1.0 } ?: 60.0
+        val configuredBudget = configuredFrameRateHz?.toDouble()
+            ?.takeIf { it.isFinite() && it > 1.0 }
+        frameBudgetHz = configuredBudget?.let { minOf(refreshRateHz, it) } ?: refreshRateHz
         sessionFile = file
         worker = thread
         val localHandler = Handler(thread.looper)
@@ -110,6 +114,7 @@ object LauncherDiagnostics {
                 writeLine(deviceHeader(context))
                 writeEvent("session_start", JSONObject()
                     .put("refresh_rate_hz", refreshRateHz)
+                    .put("frame_budget_hz", frameBudgetHz)
                     .put("recording_format", "jsonl")
                     .put("frame_source", "Cocos2dxRenderer.onDrawFrame"))
                 pruneOldSessions(directory)
@@ -176,12 +181,12 @@ object LauncherDiagnostics {
         if (!active) return
         synchronized(frameLock) {
             if (!active) return
-            gameFrames.record(intervalNs, callbackWallNs, callbackCpuNs, refreshRateHz)
+            gameFrames.record(intervalNs, callbackWallNs, callbackCpuNs, frameBudgetHz)
             totalGameFrames.incrementAndGet()
 
             val levelWindow = currentLevelWindow
             if (currentLevelActive && levelWindow != null) {
-                levelWindow.frames.record(intervalNs, callbackWallNs, callbackCpuNs, refreshRateHz)
+                levelWindow.frames.record(intervalNs, callbackWallNs, callbackCpuNs, frameBudgetHz)
                 totalLevelFrames.incrementAndGet()
             }
         }
@@ -340,6 +345,7 @@ object LauncherDiagnostics {
             .put("screen_density_dpi", metrics.densityDpi)
             .put("total_ram_mb", memory.totalMem / (1024L * 1024L))
             .put("initial_refresh_rate_hz", refreshRateHz)
+            .put("configured_frame_budget_hz", frameBudgetHz)
     }
 
     private fun sampleProcess(context: Context) {
@@ -429,6 +435,7 @@ object LauncherDiagnostics {
         val data = JSONObject()
             .put("scope", "Cocos2dxRenderer.onDrawFrame")
             .put("refresh_rate_hz", refreshRateHz)
+            .put("frame_budget_hz", frameBudgetHz)
             .put("game_renderer", all)
             .put("level_renderer", level)
             .put("level_marker_active_at_flush", currentLevelActive)
