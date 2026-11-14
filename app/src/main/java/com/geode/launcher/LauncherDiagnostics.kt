@@ -324,7 +324,9 @@ object LauncherDiagnostics {
      * excluded so the archive cannot contain a partially-written recording.
      */
     fun createSessionsArchive(context: Context): File? {
-        val activeFile = if (active) sessionFile else null
+        // Do not archive while an active recording or its asynchronous close is in progress.
+        if (active || worker != null) return null
+        val activeFile = sessionFile
         val sessions = listSessions(context).filter { it != activeFile && it.length() > 0L }
         if (sessions.isEmpty()) return null
 
