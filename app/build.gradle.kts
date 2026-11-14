@@ -348,6 +348,7 @@ androidComponents {
 }
 
 dependencies {
+    implementation(project(":geode-android-sdk"))
     implementation(files("libs/discord_partner_sdk.aar"))
     implementation (platform("androidx.compose:compose-bom:2026.09.00"))
     implementation ("androidx.core:core-ktx:1.19.1")
