@@ -188,7 +188,7 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         // Begin a launcher-owned diagnostic session before the Cocos surface starts drawing.
         @Suppress("DEPRECATION")
         val displayRefreshRate = windowManager.defaultDisplay.refreshRate
-        LauncherDiagnostics.startSession(this, displayRefreshRate)
+        LauncherDiagnostics.startSession(this, displayRefreshRate, mLimitedRefreshRate?.toFloat())
 
         val baseView = createView()
         if (gameVersionCode >= 42L) {
