@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "launcher"
-include(":app")
+include(":app", ":geode-android-sdk")
