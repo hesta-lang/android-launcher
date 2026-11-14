@@ -93,7 +93,7 @@ int32_t call_boolean_two_strings(
 }
 } // namespace
 
-JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
+extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     if (vm == nullptr) return JNI_ERR;
 
     JNIEnv* env = nullptr;
@@ -143,7 +143,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     return JNI_VERSION_1_6;
 }
 
-JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void*) {
+extern "C" JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void*) {
     if (vm == nullptr || g_sdk_class == nullptr) return;
 
     JNIEnv* env = nullptr;
