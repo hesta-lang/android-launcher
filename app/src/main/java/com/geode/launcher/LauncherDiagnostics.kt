@@ -627,11 +627,7 @@ object LauncherDiagnostics {
 
         @Synchronized
         fun recordGpuTime(gpuTimeNs: Long) {
-            if (gpuStored == CAPACITY) {
-                gpuCursor = (gpuCursor + 1) % CAPACITY
-            } else {
-                gpuStored++
-            }
+            if (gpuStored < CAPACITY) gpuStored++
             gpuTime[gpuCursor] = gpuTimeNs.coerceAtLeast(0L)
             gpuCursor = (gpuCursor + 1) % CAPACITY
         }
