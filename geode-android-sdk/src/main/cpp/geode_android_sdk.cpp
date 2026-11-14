@@ -164,7 +164,7 @@ extern "C" GEODE_ANDROID_SDK_EXPORT int32_t geode_android_sdk_get_api_version(vo
 }
 
 extern "C" GEODE_ANDROID_SDK_EXPORT const char* geode_android_sdk_get_capabilities_json(void) {
-    return R"(["device.info","launcher.info","diagnostics.events","diagnostics.level-markers"])";
+    return R"(["device.info","launcher.info","diagnostics.events","diagnostics.level-markers","graphics.context-query","graphics.gles-compat-helpers"])";
 }
 
 extern "C" GEODE_ANDROID_SDK_EXPORT int32_t geode_android_sdk_is_available(void) {

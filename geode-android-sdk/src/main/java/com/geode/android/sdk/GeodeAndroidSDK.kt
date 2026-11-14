@@ -78,7 +78,7 @@ object GeodeAndroidSDK {
 
     @JvmStatic
     fun getCapabilitiesJson(): String =
-        """["device.info","launcher.info","diagnostics.events","diagnostics.level-markers"]"""
+        """["device.info","launcher.info","diagnostics.events","diagnostics.level-markers","graphics.context-query","graphics.gles-compat-helpers"]"""
 
     @JvmStatic
     fun getLauncherVersion(): String = launcherVersion

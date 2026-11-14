@@ -99,6 +99,8 @@ jobs:
         path: |
           geode-android-sdk/build/outputs/aar/geode-android-sdk-release.aar
           geode-android-sdk/src/main/cpp/include/geode_android_sdk.h
+          geode-android-sdk/src/main/cpp/include/geode_android_graphics.h
+          geode-android-sdk/src/main/cpp/include/geode_android_gl_compat.h
           geode-android-sdk/README.md
         if-no-files-found: error
 
