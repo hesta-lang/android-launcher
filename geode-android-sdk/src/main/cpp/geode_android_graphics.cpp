@@ -6,6 +6,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <jni.h>
+
 namespace {
 bool at_least(int a,int b,int x,int y){return a>x||(a==x&&b>=y);}
 bool parse_version(const char* text,int& major,int& minor){
@@ -43,7 +48,54 @@ void copy_string(char* out,size_t cap,GLenum name){
  if(!out||!cap)return;const char* v=(const char*)glGetString(name);
  if(!v){out[0]='\0';return;}std::snprintf(out,cap,"%s",v);
 }
+std::string json_quote(const std::string& value) {
+ std::string out = "\"";
+ for (unsigned char c : value) {
+  switch (c) {
+   case '"': out += "\\\""; break;
+   case '\\': out += "\\\\"; break;
+   case '\b': out += "\\b"; break;
+   case '\f': out += "\\f"; break;
+   case '\n': out += "\\n"; break;
+   case '\r': out += "\\r"; break;
+   case '\t': out += "\\t"; break;
+   default:
+    if (c < 0x20) {
+     const char hex[] = "0123456789abcdef";
+     out += "\\u00";
+     out += hex[(c >> 4) & 0x0f];
+     out += hex[c & 0x0f];
+    } else {
+     out += static_cast<char>(c);
+    }
+  }
+ }
+ out += '"';
+ return out;
 }
+std::vector<std::string> collect_extensions(int major, int minor) {
+ std::vector<std::string> result;
+ if (at_least(major, minor, 3, 0)) {
+  GLint count = 0;
+  glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+  count = std::max(0, std::min(count, 8192));
+  result.reserve(static_cast<size_t>(count));
+  for (GLint i = 0; i < count; ++i) {
+   const char* value = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+   if (value && *value) result.emplace_back(value);
+  }
+ } else {
+  const char* raw = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+  if (raw) {
+   std::istringstream stream(raw);
+   std::string value;
+   while (stream >> value && result.size() < 8192) result.emplace_back(value);
+  }
+ }
+ return result;
+}
+}
+
 extern "C" GEODE_ANDROID_GRAPHICS_EXPORT int32_t geode_android_graphics_query_current_context(geode_android_graphics_info* info){
  if(!info||info->struct_size<sizeof(uint32_t)*2u)return -1;
  const uint32_t caller_size=info->struct_size;
@@ -88,4 +140,53 @@ extern "C" GEODE_ANDROID_GRAPHICS_EXPORT int32_t geode_android_graphics_has_exte
 extern "C" GEODE_ANDROID_GRAPHICS_EXPORT void* geode_android_graphics_get_proc_address(const char* name){
  if(!name||!*name||eglGetCurrentContext()==EGL_NO_CONTEXT)return nullptr;
  return reinterpret_cast<void*>(eglGetProcAddress(name));
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_geode_android_sdk_GeodeAndroidSDK_nativeQueryGraphicsContext(JNIEnv* env, jclass) {
+ geode_android_graphics_info info{};
+ info.struct_size = sizeof(info);
+ const int32_t query_result = geode_android_graphics_query_current_context(&info);
+ std::ostringstream out;
+ out << "{\"query_result\":" << query_result
+     << ",\"context_current\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_CONTEXT_CURRENT) ? "true" : "false");
+ if (query_result > 0 && (info.flags & GEODE_ANDROID_GRAPHICS_CONTEXT_CURRENT)) {
+  const int major = info.major_version;
+  const int minor = info.minor_version;
+  const auto extensions = collect_extensions(major, minor);
+  out << ",\"major_version\":" << major
+      << ",\"minor_version\":" << minor
+      << ",\"vendor\":" << json_quote(info.vendor)
+      << ",\"renderer\":" << json_quote(info.renderer)
+      << ",\"gl_version\":" << json_quote(info.version)
+      << ",\"shading_language_version\":" << json_quote(info.shading_language_version)
+      << ",\"capabilities\":{"
+      << "\"gles31\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_GLES31) ? "true" : "false")
+      << ",\"compute_shader\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_COMPUTE_SHADER) ? "true" : "false")
+      << ",\"shader_storage_buffer\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_SHADER_STORAGE_BUFFER) ? "true" : "false")
+      << ",\"draw_indirect\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_DRAW_INDIRECT) ? "true" : "false")
+      << ",\"multi_draw_indirect\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_MULTI_DRAW_INDIRECT) ? "true" : "false")
+      << ",\"shader_draw_parameters\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_SHADER_DRAW_PARAMETERS) ? "true" : "false")
+      << ",\"program_resource_query\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_PROGRAM_RESOURCE_QUERY) ? "true" : "false")
+      << ",\"map_buffer_range\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_MAP_BUFFER_RANGE) ? "true" : "false")
+      << ",\"khr_debug\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_KHR_DEBUG) ? "true" : "false")
+      << ",\"disjoint_timer_query\":" << ((info.flags & GEODE_ANDROID_GRAPHICS_DISJOINT_TIMER_QUERY) ? "true" : "false")
+      << "},\"limits\":{"
+      << "\"max_compute_work_group_invocations\":" << info.max_compute_work_group_invocations
+      << ",\"max_shader_storage_buffer_bindings\":" << info.max_shader_storage_buffer_bindings
+      << ",\"max_shader_storage_block_size\":" << info.max_shader_storage_block_size
+      << ",\"compute_work_group_count\":["
+      << info.max_compute_work_group_count[0] << "," << info.max_compute_work_group_count[1] << "," << info.max_compute_work_group_count[2] << "]"
+      << ",\"compute_work_group_size\":["
+      << info.max_compute_work_group_size[0] << "," << info.max_compute_work_group_size[1] << "," << info.max_compute_work_group_size[2] << "]"
+      << "},\"extension_count\":" << extensions.size() << ",\"extensions\":[";
+  for (size_t i = 0; i < extensions.size(); ++i) {
+   if (i) out << ",";
+   out << json_quote(extensions[i]);
+  }
+  out << "]";
+ }
+ out << "}";
+ const std::string json = out.str();
+ return env->NewStringUTF(json.c_str());
 }

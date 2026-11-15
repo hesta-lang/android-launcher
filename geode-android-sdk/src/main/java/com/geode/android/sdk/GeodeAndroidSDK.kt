@@ -5,7 +5,7 @@ import android.util.Log
 import androidx.annotation.Keep
 
 /**
- * Stable, versioned entry point shared by Android64 Geode mods.
+ * Stable, versioned entry point shared by Geode mods running inside hesta-lang's Android64 launcher.
  *
  * The launcher initializes this object before loading Geode mods. Native mods
  * can use the C ABI in geode_android_sdk.h after linking the AAR's .so.
@@ -38,10 +38,14 @@ object GeodeAndroidSDK {
         fun onLevelEnded()
     }
 
+    @Keep
+    @JvmStatic
+    external fun nativeQueryGraphicsContext(): String?
+
     /**
      * Called by the launcher before loading Geode mods.
      * Returns false when the native bridge could not be loaded; the game can
-     * continue without the optional SDK.
+     * continue without these optional SDK features.
      */
     @JvmStatic
     fun initialize(
@@ -135,7 +139,7 @@ object GeodeAndroidSDK {
             true
         } catch (error: Exception) {
             Log.e("GeodeAndroidSDK", "Level-end callback failed", error)
-            false
+            return false
         }
     }
 }

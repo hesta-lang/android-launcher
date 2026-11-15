@@ -5,14 +5,14 @@ import android.os.Debug
 import android.os.SystemClock
 import org.cocos2dx.lib.Cocos2dxGLSurfaceView
 import org.cocos2dx.lib.Cocos2dxRenderer
+import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
 /**
- * CPU-only observer around the original Cocos renderer.
+ * Passive diagnostics wrapper around the original Cocos renderer.
  *
- * No EGL calls, GLES queries, GL timer queries, buffer operations, or context
- * changes are performed here. Each rendering callback is delegated unchanged
- * to Cocos2dxRenderer.
+ * GLES capabilities are queried once from onSurfaceCreated while Cocos' own
+ * EGL context is current. Frame rendering remains delegated to Cocos unchanged.
  */
 @Keep
 class DiagnosticsCocos2dxRenderer(
@@ -22,6 +22,17 @@ class DiagnosticsCocos2dxRenderer(
 
     fun resetFrameClock() {
         previousFrameStartNs = 0L
+    }
+
+    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        super.onSurfaceCreated(gl, config)
+        previousFrameStartNs = 0L
+        GlesObserver.onContextCreated()
+    }
+
+    override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        super.onSurfaceChanged(gl, width, height)
+        LauncherDiagnostics.recordGraphicsSurface(width, height)
     }
 
     override fun onDrawFrame(gl: GL10?) {
@@ -42,7 +53,7 @@ class DiagnosticsCocos2dxRenderer(
         val callbackStartNs = System.nanoTime()
         val cpuStartNs = Debug.threadCpuTimeNanos()
         try {
-            // This is the original Cocos renderer; do not add GL work around it.
+            // Preserve the original Cocos draw callback; no GL work is added per frame.
             super.onDrawFrame(gl)
         } finally {
             val callbackWallNs = System.nanoTime() - callbackStartNs
