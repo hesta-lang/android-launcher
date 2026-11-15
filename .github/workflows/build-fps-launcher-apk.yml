@@ -96,7 +96,7 @@ jobs:
           VERIFY_OUTPUT="$("$APKSIGNER" verify --verbose --print-certs "$APK_PATH")"
           printf '%s\n' "$VERIFY_OUTPUT"
           CERT_SHA1="$(printf '%s\n' "$VERIFY_OUTPUT" | awk -F': ' '/Signer #1 certificate SHA-1 digest:/ {print toupper($2); exit}')"
-          EXPECTED_CERT_SHA1="15:42:58:7E:0A:99:D6:53:BD:80:8A:93:3A:63:19:51:2E:B8:14:C3"
+          EXPECTED_CERT_SHA1="1542587E0A99D653BD808A933A6319512EB814C3"
           test "$CERT_SHA1" = "$EXPECTED_CERT_SHA1" || {
             echo "::error::APK signing certificate does not match the previously distributed launcher. Refusing to upload an update that may not install over it."
             exit 1
