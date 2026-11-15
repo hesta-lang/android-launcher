@@ -534,6 +534,12 @@ object GeodeUtils {
 
     const val ARGUMENT_SAFE_MODE = "--geode:safe-mode"
 
+    /**
+     * Launcher-only argument that disables the launcher's optional FPS cap.
+     * It is consumed by GeometryDashActivity and must never reach Geode.
+     */
+    const val ARGUMENT_UNLOCK_FPS = "--unlock-fps"
+
     private var additionalLaunchArguments = arrayListOf<String>()
     fun setAdditionalLaunchArguments(vararg args: String) {
         additionalLaunchArguments.addAll(args)
@@ -546,8 +552,16 @@ object GeodeUtils {
         activity.get()?.apply {
             val preferences = PreferenceUtils.get(this)
 
+            // Strip launcher-only switches while preserving the user's other arguments.
             val userArgs = preferences.getString(PreferenceUtils.Key.LAUNCH_ARGUMENTS)
-            val args = if (!userArgs.isNullOrEmpty()) {
+                .orEmpty()
+                .replace(
+                    Regex("(?<!\\\\S)${Regex.escape(ARGUMENT_UNLOCK_FPS)}(?!\\\\S)"),
+                    " "
+                )
+                .trim()
+
+            val args = if (userArgs.isNotEmpty()) {
                 listOf(userArgs) + additionalLaunchArguments
             } else additionalLaunchArguments
 
