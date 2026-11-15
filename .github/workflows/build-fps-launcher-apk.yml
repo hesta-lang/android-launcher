@@ -95,8 +95,16 @@ jobs:
 
           VERIFY_OUTPUT="$("$APKSIGNER" verify --verbose --print-certs "$APK_PATH")"
           printf '%s\n' "$VERIFY_OUTPUT"
-          CERT_SHA1="$(printf '%s\n' "$VERIFY_OUTPUT" | awk -F': ' '/Signer #1 certificate SHA-1 digest:/ {print toupper($2); exit}')"
+
+          # Build Tools may print either "Signer #1 certificate ..." or
+          # "V2 Signer: certificate ...". Extract the value after the final
+          # colon so both formats are handled without weakening the check.
+          CERT_SHA1="$(printf '%s\n' "$VERIFY_OUTPUT" | awk -F': ' '/certificate SHA-1 digest:/ {print toupper($NF); exit}')"
           EXPECTED_CERT_SHA1="1542587E0A99D653BD808A933A6319512EB814C3"
+          test "${#CERT_SHA1}" -eq 40 || {
+            echo "::error::Could not read a valid APK signing certificate SHA-1 digest."
+            exit 1
+          }
           test "$CERT_SHA1" = "$EXPECTED_CERT_SHA1" || {
             echo "::error::APK signing certificate does not match the previously distributed launcher. Refusing to upload an update that may not install over it."
             exit 1
