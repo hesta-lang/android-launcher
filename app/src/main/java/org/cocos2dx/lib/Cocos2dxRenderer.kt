@@ -2,7 +2,9 @@ package org.cocos2dx.lib
 
 import android.opengl.GLSurfaceView
 import android.os.Build
+import javax.microedition.khronos.egl.EGL10
 import javax.microedition.khronos.egl.EGLConfig
+import javax.microedition.khronos.egl.EGLContext
 import javax.microedition.khronos.opengles.GL10
 
 private const val NANOSECONDS_PER_SECOND = 1000000000L
@@ -97,12 +99,44 @@ class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceVi
         screenHeight = surfaceHeight
     }
 
+    /**
+     * Remove EGL's explicit VSync wait for swaps. This is called from
+     * GLSurfaceView's GL thread while its EGL surface is current.
+     *
+     * The display compositor can still limit what is physically presented.
+     * Some vendor EGL drivers reject interval 0; in that case we keep the
+     * driver's default pacing rather than failing game initialization.
+     */
+    private fun disableEglVSync() {
+        val egl = EGLContext.getEGL() as? EGL10
+        if (egl == null) {
+            println("FPS unlock EGL: EGL10 interface unavailable; keeping driver pacing")
+            return
+        }
+
+        val display = egl.eglGetCurrentDisplay()
+        if (display == null || display == EGL10.EGL_NO_DISPLAY) {
+            println("FPS unlock EGL: no current EGL display; keeping driver pacing")
+            return
+        }
+
+        if (egl.eglSwapInterval(display, 0)) {
+            println("FPS unlock EGL: eglSwapInterval(0) applied on GL thread")
+        } else {
+            val error = egl.eglGetError()
+            println("FPS unlock EGL: eglSwapInterval(0) rejected (EGL error=0x${error.toString(16)}); keeping driver pacing")
+        }
+    }
+
     override fun onSurfaceCreated(gl10: GL10?, eglConfig: EGLConfig?) {
         nativeInit(screenWidth, screenHeight)
         lastTickInNanoSeconds = System.nanoTime()
     }
 
     override fun onSurfaceChanged(gl10: GL10?, width: Int, height: Int) {
+        // Re-apply whenever GLSurfaceView creates or reattaches an EGL surface.
+        disableEglVSync()
+
         if (setFrameRate && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             handler.updateRefreshRate()
         }
