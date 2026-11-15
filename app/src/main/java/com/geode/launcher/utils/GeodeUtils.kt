@@ -556,7 +556,7 @@ object GeodeUtils {
             val userArgs = preferences.getString(PreferenceUtils.Key.LAUNCH_ARGUMENTS)
                 .orEmpty()
                 .replace(
-                    Regex("(?<!\\\\S)${Regex.escape(ARGUMENT_UNLOCK_FPS)}(?!\\\\S)"),
+                    Regex("(?<!\\S)${Regex.escape(ARGUMENT_UNLOCK_FPS)}(?!\\S)"),
                     " "
                 )
                 .trim()
