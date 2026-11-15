@@ -138,14 +138,21 @@ jobs:
 
         "$APKSIGNER" verify --verbose "$APK_PATH"
 
-        APK_CERT_SHA1="$("$APKSIGNER" verify --print-certs "$APK_PATH" | awk -F'Signer #1 certificate SHA-1 digest: ' '/Signer #1 certificate SHA-1 digest:/ {print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-        KEY_CERT_SHA1="$(keytool -list -v -keystore "$HOME/release.keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" | awk -F'SHA1: ' '/SHA1: / {print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-        test -n "$APK_CERT_SHA1"
-        test -n "$KEY_CERT_SHA1"
-        test "$APK_CERT_SHA1" = "$KEY_CERT_SHA1"
+        APK_CERT_SHA1="$("$APKSIGNER" verify --print-certs "$APK_PATH" | sed -nE 's/.*certificate SHA-1 digest: ([0-9A-Fa-f]+).*/\1/p' | head -n1 | tr '[:upper:]' '[:lower:]')"
+        KEY_CERT_SHA1="$(keytool -exportcert -keystore "$HOME/release.keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" | sha1sum | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+        if [ -z "$APK_CERT_SHA1" ] || [ -z "$KEY_CERT_SHA1" ]; then
+          echo "Could not read APK or release-key certificate fingerprint."
+          exit 1
+        fi
+        echo "APK signing certificate SHA-1: $APK_CERT_SHA1"
+        echo "Configured release key SHA-1: $KEY_CERT_SHA1"
+        if [ "$APK_CERT_SHA1" != "$KEY_CERT_SHA1" ]; then
+          echo "Signing certificate mismatch: this APK cannot update an installation signed with the configured release key."
+          exit 1
+        fi
 
         BADGING="$("$AAPT" dump badging "$APK_PATH")"
-        echo "$BADGING" | grep -F "package: name='com.geode.launcher' versionCode='32' versionName='1.9.1'"
+        echo "$BADGING" | grep -E "^package: name='com\.geode\.launcher' versionCode='32' versionName='1\.9\.1'([[:space:]]|$)"
         echo "Update compatibility verified: package, version, and signing certificate match the configured release key."
 
     - name: Rename apk
