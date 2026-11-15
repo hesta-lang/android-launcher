@@ -533,7 +533,20 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         mScreenZoom = preferenceUtils.getInt(PreferenceUtils.Key.SCREEN_ZOOM) / 100.0f
         mScreenZoomFit = preferenceUtils.getBoolean(PreferenceUtils.Key.SCREEN_ZOOM_FIT)
 
-        val limitedRefreshRate = preferenceUtils.getInt(PreferenceUtils.Key.LIMIT_FRAME_RATE).takeIf { it != 0 }
+        // Launcher-only argument: bypass the launcher's optional FPS cap without
+        // passing the argument through to Geode.
+        val unlockFps = preferenceUtils.getString(PreferenceUtils.Key.LAUNCH_ARGUMENTS)
+            .orEmpty()
+            .split(Regex("\\s+"))
+            .any { it == GeodeUtils.ARGUMENT_UNLOCK_FPS }
+
+        val limitedRefreshRate = if (unlockFps) {
+            Log.i("GeodeLauncher", "FPS argument ${GeodeUtils.ARGUMENT_UNLOCK_FPS} detected; configured FPS limit bypassed")
+            null
+        } else {
+            Log.i("GeodeLauncher", "FPS argument ${GeodeUtils.ARGUMENT_UNLOCK_FPS} not detected; configured FPS limit unchanged")
+            preferenceUtils.getInt(PreferenceUtils.Key.LIMIT_FRAME_RATE).takeIf { it != 0 }
+        }
         mLimitedRefreshRate = limitedRefreshRate
 
         mForceRefreshRate = true
