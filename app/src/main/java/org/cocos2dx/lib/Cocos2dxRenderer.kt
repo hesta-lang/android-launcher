@@ -1,10 +1,9 @@
 package org.cocos2dx.lib
 
+import android.opengl.EGL14
 import android.opengl.GLSurfaceView
 import android.os.Build
-import javax.microedition.khronos.egl.EGL10
 import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.egl.EGLContext
 import javax.microedition.khronos.opengles.GL10
 
 private const val NANOSECONDS_PER_SECOND = 1000000000L
@@ -108,22 +107,17 @@ class Cocos2dxRenderer(private var handler: Cocos2dxGLSurfaceView) : GLSurfaceVi
      * driver's default pacing rather than failing game initialization.
      */
     private fun disableEglVSync() {
-        val egl = EGLContext.getEGL() as? EGL10
-        if (egl == null) {
-            println("FPS unlock EGL: EGL10 interface unavailable; keeping driver pacing")
-            return
-        }
-
-        val display = egl.eglGetCurrentDisplay()
-        if (display == null || display == EGL10.EGL_NO_DISPLAY) {
+        // EGL14 is available from API 17; this launcher targets API 23+.
+        val display = EGL14.eglGetCurrentDisplay()
+        if (display == EGL14.EGL_NO_DISPLAY) {
             println("FPS unlock EGL: no current EGL display; keeping driver pacing")
             return
         }
 
-        if (egl.eglSwapInterval(display, 0)) {
+        if (EGL14.eglSwapInterval(display, 0)) {
             println("FPS unlock EGL: eglSwapInterval(0) applied on GL thread")
         } else {
-            val error = egl.eglGetError()
+            val error = EGL14.eglGetError()
             println("FPS unlock EGL: eglSwapInterval(0) rejected (EGL error=0x${error.toString(16)}); keeping driver pacing")
         }
     }
