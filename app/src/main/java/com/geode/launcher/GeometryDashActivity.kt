@@ -541,16 +541,25 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         mLimitedRefreshRate = null
         mForceRefreshRate = true
         println("FPS unlock: enabled; saved LIMIT_FRAME_RATE=$savedFrameRateLimit is bypassed")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val chosenDisplay = display.supportedModes?.maxByOrNull { it.refreshRate }
-            if (chosenDisplay != null) {
-                val chosenRefreshRate = chosenDisplay.refreshRate
-                println("setupUIState: Forcing a refresh rate of $chosenRefreshRate (display ${chosenDisplay.modeId})")
+        // Display.getSupportedModes() and preferredRefreshRate are available
+        // on this launcher's minimum API level. Use the legacy Display getter on
+        // Android 10, where Activity.display is not available.
+        @Suppress("DEPRECATION")
+        val currentDisplay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display
+        } else {
+            windowManager.defaultDisplay
+        }
+        val chosenDisplay = currentDisplay.supportedModes?.maxByOrNull { it.refreshRate }
+        if (chosenDisplay != null) {
+            val chosenRefreshRate = chosenDisplay.refreshRate
+            println("FPS unlock: requesting supported refresh rate $chosenRefreshRate Hz (mode ${chosenDisplay.modeId}, API ${Build.VERSION.SDK_INT})")
 
-                window.attributes.preferredRefreshRate = chosenRefreshRate
-            } else {
-                println("setupUIState could not find a display to select refresh rate of...")
-            }
+            val attributes = window.attributes
+            attributes.preferredRefreshRate = chosenRefreshRate
+            window.attributes = attributes
+        } else {
+            println("FPS unlock: no supported display mode was returned; keeping current refresh rate")
         }
 
         if (displayMode == DisplayMode.FULLSCREEN && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
