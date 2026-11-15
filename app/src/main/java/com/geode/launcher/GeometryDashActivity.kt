@@ -533,10 +533,14 @@ class GeometryDashActivity : AppCompatActivity(), Cocos2dxHelper.Cocos2dxHelperL
         mScreenZoom = preferenceUtils.getInt(PreferenceUtils.Key.SCREEN_ZOOM) / 100.0f
         mScreenZoomFit = preferenceUtils.getBoolean(PreferenceUtils.Key.SCREEN_ZOOM_FIT)
 
-        val limitedRefreshRate = preferenceUtils.getInt(PreferenceUtils.Key.LIMIT_FRAME_RATE).takeIf { it != 0 }
-        mLimitedRefreshRate = limitedRefreshRate
-
+        // Restore the launcher's previous FPS-unlock path:
+        // select the display's highest supported refresh mode and do not
+        // apply the optional software frame limiter to Cocos2dxRenderer.
+        // The panel/Android compositor still determines the actual present rate.
+        val savedFrameRateLimit = preferenceUtils.getInt(PreferenceUtils.Key.LIMIT_FRAME_RATE)
+        mLimitedRefreshRate = null
         mForceRefreshRate = true
+        println("FPS unlock: enabled; saved LIMIT_FRAME_RATE=$savedFrameRateLimit is bypassed")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val chosenDisplay = display.supportedModes?.maxByOrNull { it.refreshRate }
             if (chosenDisplay != null) {
