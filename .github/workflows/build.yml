@@ -3,7 +3,7 @@ name: Build launcher
 on:
   workflow_dispatch:
   push:
-    branches: '*'
+    branches: '**'
 
 jobs:
   build:
@@ -114,6 +114,39 @@ jobs:
         OUT_PATH=${{github.workspace}}/geode-launcher-${{ matrix.config.lower }}-$SHORT_SHA.apk
         mv $APK_PATH $OUT_PATH
         echo "path=$OUT_PATH" >> $GITHUB_OUTPUT
+
+    - name: Verify standard release can update an existing install
+      if: ${{ matrix.config.flavor == 'standard' && matrix.config.lower == 'release' }}
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        set -euo pipefail
+        APK_PATH="${GITHUB_WORKSPACE}/geode-launcher-release-${GITHUB_SHA::7}.apk"
+        test -f "$APK_PATH"
+
+        # Keep the standard package identity and increase the installed version.
+        grep -Fq 'applicationId = "com.geode.launcher"' app/build.gradle.kts
+        grep -Fq 'versionCode = 32' app/build.gradle.kts
+        grep -Fq 'versionName = "1.9.1"' app/build.gradle.kts
+
+        BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
+        APKSIGNER="$BUILD_TOOLS/apksigner"
+        AAPT="$BUILD_TOOLS/aapt"
+        test -x "$APKSIGNER"
+        test -x "$AAPT"
+
+        "$APKSIGNER" verify --verbose "$APK_PATH"
+
+        APK_CERT_SHA1="$("$APKSIGNER" verify --print-certs "$APK_PATH" | awk -F'Signer #1 certificate SHA-1 digest: ' '/Signer #1 certificate SHA-1 digest:/ {print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+        KEY_CERT_SHA1="$(keytool -list -v -keystore "$HOME/release.keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" | awk -F'SHA1: ' '/SHA1: / {print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+        test -n "$APK_CERT_SHA1"
+        test -n "$KEY_CERT_SHA1"
+        test "$APK_CERT_SHA1" = "$KEY_CERT_SHA1"
+
+        BADGING="$("$AAPT" dump badging "$APK_PATH")"
+        echo "$BADGING" | grep -F "package: name='com.geode.launcher' versionCode='32' versionName='1.9.1'"
+        echo "Update compatibility verified: package, version, and signing certificate match the configured release key."
 
     - name: Rename apk
       id: rename_apk
