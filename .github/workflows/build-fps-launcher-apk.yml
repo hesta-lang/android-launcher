@@ -1,0 +1,116 @@
+name: Build FPS Unlock Launcher APK (Universal)
+
+on:
+  push:
+    branches:
+      - "fps/installable-apk-fix"
+    paths:
+      - ".github/workflows/build-fps-launcher-apk.yml"
+      - "app/**"
+      - "build.gradle.kts"
+      - "gradle/**"
+      - "settings.gradle.kts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fps-unlock-launcher-apk
+  cancel-in-progress: false
+
+jobs:
+  build-installable-apk:
+    name: Build and verify universal Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Prepare release signing key
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_FILE" || { echo "::error::KEYSTORE_FILE secret is empty"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "::error::KEYSTORE_PASSWORD secret is empty"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "::error::KEY_ALIAS secret is empty"; exit 1; }
+          printf '%s' "$KEYSTORE_FILE" | base64 --decode > "$HOME/release.keystore"
+          test -s "$HOME/release.keystore"
+          keytool -list -keystore "$HOME/release.keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+          echo "Release keystore is present and readable."
+
+      - name: Rebuild Discord Social SDK AAR
+        run: |
+          set -euo pipefail
+          test -f app/libs/discord-part-00
+          cat app/libs/discord-part-* > app/libs/discord_partner_sdk.aar
+          unzip -t app/libs/discord_partner_sdk.aar
+
+      - name: Build standard Release universal APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEY_PASSWORD"
+          chmod +x ./gradlew
+          ./gradlew app:assembleStandardRelease \
+            -Pandroid.injected.signing.store.file="$HOME/release.keystore" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+
+      - name: Verify package, minimum Android version, ABI and signing certificate
+        run: |
+          set -euo pipefail
+          APK_PATH="app/build/outputs/apk/standard/release/app-standard-universal-release.apk"
+          test -s "$APK_PATH" || { echo "::error::Universal APK was not produced"; exit 1; }
+
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          BUILD_TOOLS_DIR="$(find "$SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          AAPT="$BUILD_TOOLS_DIR/aapt"
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+
+          BADGING="$("$AAPT" dump badging "$APK_PATH")"
+          printf '%s\n' "$BADGING"
+          grep -Fq "package: name='com.geode.launcher' versionCode='32'" <<< "$BADGING"
+          grep -Fq "sdkVersion:'23'" <<< "$BADGING"
+
+          APK_ENTRIES="$(unzip -Z1 "$APK_PATH")"
+          grep -q '^lib/arm64-v8a/' <<< "$APK_ENTRIES"
+          grep -q '^lib/armeabi-v7a/' <<< "$APK_ENTRIES"
+
+          VERIFY_OUTPUT="$("$APKSIGNER" verify --verbose --print-certs "$APK_PATH")"
+          printf '%s\n' "$VERIFY_OUTPUT"
+          CERT_SHA1="$(printf '%s\n' "$VERIFY_OUTPUT" | awk -F': ' '/Signer #1 certificate SHA-1 digest:/ {print toupper($2); exit}')"
+          EXPECTED_CERT_SHA1="15:42:58:7E:0A:99:D6:53:BD:80:8A:93:3A:63:19:51:2E:B8:14:C3"
+          test "$CERT_SHA1" = "$EXPECTED_CERT_SHA1" || {
+            echo "::error::APK signing certificate does not match the previously distributed launcher. Refusing to upload an update that may not install over it."
+            exit 1
+          }
+
+          mkdir -p dist
+          cp "$APK_PATH" dist/GeodeLauncher-1.9.0-FPS-Unlock-universal.apk
+          sha256sum dist/GeodeLauncher-1.9.0-FPS-Unlock-universal.apk
+          stat -c 'APK size: %s bytes' dist/GeodeLauncher-1.9.0-FPS-Unlock-universal.apk
+
+      - name: Upload only the verified installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GeodeLauncher-FPS-Unlock-Installable-APK
+          path: dist/GeodeLauncher-1.9.0-FPS-Unlock-universal.apk
+          if-no-files-found: error
+          retention-days: 14
